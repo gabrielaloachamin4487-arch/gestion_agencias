@@ -1,0 +1,243 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Analytics - AgenciaOS{% endblock %}
+{% block header %}Dashboard Operativo y Financiero{% endblock %}
+
+{% block content %}
+<!-- CDN de Chart.js para los gráficos interactivos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="container-fluid px-0">
+    <!-- BARRA SUPERIOR DE MÉTRICAS RÁPIDAS (KPIs) -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-white rounded-3">
+                <span class="text-muted small fw-bold text-uppercase">Proyectos Activos</span>
+                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                    <h2 class="display-6 fw-bold mb-0 text-dark">{{ proyectos_activos|default:0 }}</h2>
+                    <span class="badge bg-primary-subtle text-primary fw-bold">+Activos</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-white rounded-3">
+                <span class="text-muted small fw-bold text-uppercase">Total Clientes</span>
+                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                    <h2 class="display-6 fw-bold mb-0 text-dark">{{ total_clientes|default:0 }}</h2>
+                    <span class="badge bg-success-subtle text-success fw-bold">Empresas</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-white rounded-3">
+                <span class="text-muted small fw-bold text-uppercase">Tareas Pendientes</span>
+                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                    <h2 class="display-6 fw-bold mb-0 text-dark">{{ tareas_pendientes|default:0 }}</h2>
+                    <span class="badge bg-warning-subtle text-warning-emphasis fw-bold">En flujo</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 bg-white rounded-3">
+                <span class="text-muted small fw-bold text-uppercase">Costo Operativo Prom.</span>
+                <div class="d-flex align-items-baseline justify-content-between mt-2">
+                    <h2 class="display-6 fw-bold mb-0 text-dark">$25.00</h2>
+                    <span class="badge bg-secondary-subtle text-secondary fw-bold">por hora</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN DE GRÁFICOS INTERACTIVOS ESTILO POWERBI -->
+    <div class="row g-3 mb-4">
+        <!-- Gráfico de Carga de Trabajo (Barras Agrupadas) -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm p-4 bg-white rounded-3 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-column me-2 text-primary"></i> Distribución de Horas por Equipo</h6>
+                    <small class="text-muted">Diseñadores vs Copywriters</small>
+                </div>
+                <div style="height: 280px;">
+                    <canvas id="cargaTrabajoChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico de Dona: Rentabilidad vs Costos -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm p-4 bg-white rounded-3 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-pie me-2 text-info"></i> Balance Financiero</h6>
+                </div>
+                <div style="height: 260px;" class="d-flex justify-content-center align-items-center">
+                    <canvas id="balanceDonaChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN INFERIOR: TABLA DE RENTABILIDAD Y ALERTAS -->
+    <div class="row g-3">
+        <!-- Tabla Estilizada de Clientes -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm bg-white rounded-3">
+                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-table me-2 text-success"></i> Reporte de Rentabilidad por Cliente</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3">Cliente</th>
+                                <th>Presupuesto</th>
+                                <th>Horas Inv.</th>
+                                <th>Costo Op.</th>
+                                <th class="text-end pe-3">Rentabilidad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in reporte_rentabilidad %}
+                            <tr>
+                                <td class="ps-3 fw-bold text-dark">{{ r.cliente }}</td>
+                                <td class="fw-semibold">${{ r.presupuesto|floatformat:2 }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ r.horas_invertidas }}h</span></td>
+                                <td class="text-muted">${{ r.costo_total|floatformat:2 }}</td>
+                                <td class="text-end pe-3">
+                                    {% if r.es_rentable %}
+                                        <span class="badge bg-success text-white px-3 py-2 fw-bold">
+                                            +${{ r.rentabilidad|floatformat:2 }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger text-white px-3 py-2 fw-bold">
+                                            -${{ r.rentabilidad|floatformat:2|slice:"1:" }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">No hay datos de clientes registrados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tarjeta de Revisiones y Alertas -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm bg-white rounded-3 h-100">
+                <div class="p-3 border-bottom">
+                    <h6 class="fw-bold mb-0 text-danger"><i class="fa-solid fa-triangle-exclamation me-2"></i> Exceso de Horas en Revisiones</h6>
+                </div>
+                <div class="p-3">
+                    <ul class="list-group list-group-flush">
+                        {% for e in entregables_revision %}
+                        <li class="list-group-item px-0 py-2 border-0 mb-2">
+                            <div class="p-3 rounded-3 bg-light border-start border-4 border-danger">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong class="text-dark">{{ e.titulo }}</strong>
+                                    <span class="badge bg-danger">+{{ e.horas_revision|default:0 }}h</span>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    {% if e.asignado_a %}
+                                        {{ e.asignado_a.first_name|default:e.asignado_a.username }}
+                                    {% else %}
+                                        <span class="fst-italic text-warning">Sin asignar</span>
+                                    {% endif %} 
+                                    · <span class="fw-semibold text-secondary">{{ e.rol_responsable|default:"Sin Rol" }}</span>
+                                </small>
+                            </div>
+                        </li>
+                        {% empty %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="fa-solid fa-circle-check text-success fa-3x mb-2 d-block"></i>
+                            <small>Sin alertas de revisión pendientes</small>
+                        </div>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- GENERACIÓN DINÁMICA DE LOS GRÁFICOS CON CHART.JS -->
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // 1. Datos para Gráfico de Carga de Trabajo
+        const disesLabels = [{% for d in carga_disenadores %}"{{ d.asignado_a__first_name|default:d.asignado_a__username|default:'Sin Asignar' }}",{% endfor %}];
+        const disesHoras = [{% for d in carga_disenadores %}{{ d.horas_totales|default:0 }},{% endfor %}];
+
+        const copysLabels = [{% for c in carga_copywriters %}"{{ c.asignado_a__first_name|default:c.asignado_a__username|default:'Sin Asignar' }}",{% endfor %}];
+        const copysHoras = [{% for c in carga_copywriters %}{{ c.horas_totales|default:0 }},{% endfor %}];
+
+        // Unir usuarios únicos para las barras
+        const allLabels = Array.from(new Set([...disesLabels, ...copysLabels]));
+        if (allLabels.length === 0) allLabels.push("Sin Asignar");
+
+        const ctxBarras = document.getElementById('cargaTrabajoChart').getContext('2d');
+        new Chart(ctxBarras, {
+            type: 'bar',
+            data: {
+                labels: allLabels,
+                datasets: [
+                    {
+                        label: 'Diseño (Hrs)',
+                        data: disesHoras.length ? disesHoras : [0],
+                        backgroundColor: '#0d6efd',
+                        borderRadius: 6
+                    },
+                    {
+                        label: 'Copywriting (Hrs)',
+                        data: copysHoras.length ? copysHoras : [0],
+                        backgroundColor: '#0dcaf0',
+                        borderRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        // 2. Datos para Gráfico de Dona Financiero
+        let totalPresupuesto = 0;
+        let totalCosto = 0;
+
+        {% for r in reporte_rentabilidad %}
+            totalPresupuesto += {{ r.presupuesto|default:0 }};
+            totalCosto += {{ r.costo_total|default:0 }};
+        {% endfor %}
+
+        const ctxDona = document.getElementById('balanceDonaChart').getContext('2d');
+        new Chart(ctxDona, {
+            type: 'doughnut',
+            data: {
+                labels: ['Presupuesto Total', 'Costo Operativo'],
+                datasets: [{
+                    data: [totalPresupuesto || 1, totalCosto || 0],
+                    backgroundColor: ['#198754', '#dc3545'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                cutout: '70%'
+            }
+        });
+    });
+</script>
+{% endblock %}

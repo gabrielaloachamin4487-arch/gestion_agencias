@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Campañas - AgenciaOS{% endblock %}
+{% block header %}Gestión de Campañas{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-5 mb-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">📢 Crear Nueva Campaña</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Cliente</label>
+                        {{ form.cliente }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nombre de la Campaña</label>
+                        {{ form.nombre }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Presupuesto ($)</label>
+                        {{ form.presupuesto }}
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label fw-bold">Fecha Inicio</label>
+                            {{ form.fecha_inicio }}
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label fw-bold">Fecha Fin</label>
+                            {{ form.fecha_fin }}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100 mt-2 fw-bold">Guardar Campaña</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">📋 Campañas Existentes</h5>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for c in campanas %}
+                    <li class="list-group-item p-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1 text-primary fw-bold">{{ c.nombre }}</h6>
+                            <small class="text-muted">🏢 Cliente: {{ c.cliente.nombre_empresa }} | 📅 Inicio: {{ c.fecha_inicio|date:"d/m/Y" }}</small>
+                        </div>
+                        <span class="badge bg-success">${{ c.presupuesto }}</span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center py-4 text-muted">Aún no hay campañas registradas.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

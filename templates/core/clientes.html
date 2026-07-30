@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Clientes - AgenciaOS{% endblock %}
+{% block header %}Gestión de Clientes{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Formulario -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">👤 Registrar Cliente</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Empresa</label>
+                        {{ form.nombre_empresa }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nombre de Contacto</label>
+                        {{ form.contacto_nombre }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Email</label>
+                        {{ form.email }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Teléfono</label>
+                        {{ form.telefono }}
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Guardar Cliente</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">👥 Clientes de la Agencia</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Empresa</th>
+                            <th>Contacto</th>
+                            <th>Email</th>
+                            <th>Teléfono</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in clientes %}
+                        <tr>
+                            <td><strong>{{ c.nombre_empresa }}</strong></td>
+                            <td>{{ c.contacto_nombre }}</td>
+                            <td>{{ c.email }}</td>
+                            <td>{{ c.telefono|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">No hay clientes registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

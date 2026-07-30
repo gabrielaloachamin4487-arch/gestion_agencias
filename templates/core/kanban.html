@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+
+{% block title %}Tablero Kanban - AgenciaOS{% endblock %}
+{% block header %}Tablero Interactivo de Aprobación Kanban{% endblock %}
+
+{% block content %}
+<!-- Carga de Librerías CDN -->
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+
+<!-- Driver.js para Tour Guiado -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+
+<style>
+/* Evitar la selección de texto en azul al presionar teclas */
+body, .kanban-card, .kanban-col {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+.kanban-card.selected-card {
+    border: 3px solid #0d6efd !important;
+    background-color: #f0f7ff !important;
+}
+</style>
+
+<div class="container-fluid px-0">
+    <!-- Encabezado -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="fw-bold mb-1">Gestión Interactiva de Entregables</h5>
+            <p class="text-muted small mb-0">
+                Haz clic en una tarjeta y presiona <kbd>Alt + K</kbd> para aprobarla, o arrástrala de columna.
+            </p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-secondary me-2 fw-bold" id="btnTourGuiado">
+                <i class="fa-solid fa-circle-question me-1"></i> Tour Guiado
+            </button>
+            <button type="button" class="btn btn-primary fw-bold" id="btnNuevoArte" data-bs-toggle="modal" data-bs-target="#modalNuevoEntregable">
+                <i class="fa-solid fa-plus me-1"></i> Nuevo Arte / Entregable
+            </button>
+        </div>
+    </div>
+
+    <!-- Tablero Kanban -->
+    <div class="row g-3">
+        <!-- Pendientes -->
+        <div class="col-md-3">
+            <div class="card bg-light border-0 shadow-sm rounded-3">
+                <div class="card-header bg-warning bg-opacity-25 border-0 fw-bold text-dark py-3" id="step-pendientes">
+                    <i class="fa-regular fa-clock me-1"></i> Pendientes
+                </div>
+                <div class="card-body p-2 kanban-col" data-estado="PENDIENTE" style="min-height: 450px;">
+                    {% for item in pendientes %}
+                    <div class="card border-0 shadow-sm mb-2 p-3 rounded-3 kanban-card" data-id="{{ item.id }}" style="cursor: pointer;">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="fw-bold text-dark mb-0 item-titulo">{{ item.titulo }}</h6>
+                            <span class="badge bg-warning text-dark">{{ item.rol_responsable|default:"Sin rol" }}</span>
+                        </div>
+                        <small class="text-muted d-block"><i class="fa-solid fa-folder me-1"></i>{{ item.proyecto.titulo }}</small>
+                        <hr class="my-2 text-muted">
+                        <div class="d-flex justify-content-between align-items-center text-muted small">
+                            <span><i class="fa-solid fa-user me-1"></i>{% if item.asignado_a %}{{ item.asignado_a.first_name|default:item.asignado_a.username }}{% else %}Sin asignar{% endif %}</span>
+                            <span>{{ item.horas_estimadas|default:0 }}h est.</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-center text-muted small py-4 sin-tareas">No hay tareas pendientes</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- En Proceso -->
+        <div class="col-md-3">
+            <div class="card bg-light border-0 shadow-sm rounded-3">
+                <div class="card-header bg-info bg-opacity-25 border-0 fw-bold text-dark py-3" id="step-proceso">
+                    <i class="fa-solid fa-spinner me-1"></i> En Proceso
+                </div>
+                <div class="card-body p-2 kanban-col" data-estado="EN_PROCESO" style="min-height: 450px;">
+                    {% for item in en_proceso %}
+                    <div class="card border-0 shadow-sm mb-2 p-3 rounded-3 border-start border-4 border-info kanban-card" data-id="{{ item.id }}" style="cursor: pointer;">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="fw-bold text-dark mb-0 item-titulo">{{ item.titulo }}</h6>
+                            <span class="badge bg-info text-dark">{{ item.rol_responsable|default:"Sin rol" }}</span>
+                        </div>
+                        <small class="text-muted d-block"><i class="fa-solid fa-folder me-1"></i>{{ item.proyecto.titulo }}</small>
+                        <hr class="my-2 text-muted">
+                        <div class="d-flex justify-content-between align-items-center text-muted small">
+                            <span><i class="fa-solid fa-user me-1"></i>{% if item.asignado_a %}{{ item.asignado_a.first_name|default:item.asignado_a.username }}{% else %}Sin asignar{% endif %}</span>
+                            <span>{{ item.horas_estimadas|default:0 }}h est.</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-center text-muted small py-4 sin-tareas">No hay tareas en proceso</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Correcciones -->
+        <div class="col-md-3">
+            <div class="card bg-light border-0 shadow-sm rounded-3">
+                <div class="card-header bg-danger bg-opacity-25 border-0 fw-bold text-dark py-3" id="step-revisiones">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i> Correcciones
+                </div>
+                <div class="card-body p-2 kanban-col" data-estado="CORRECCION" style="min-height: 450px;">
+                    {% for item in correccion %}
+                    <div class="card border-0 shadow-sm mb-2 p-3 rounded-3 border-start border-4 border-danger kanban-card" data-id="{{ item.id }}" style="cursor: pointer;">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="fw-bold text-dark mb-0 item-titulo">{{ item.titulo }}</h6>
+                            <span class="badge bg-danger">{{ item.horas_revision|default:0 }}h rev.</span>
+                        </div>
+                        <small class="text-muted d-block"><i class="fa-solid fa-folder me-1"></i>{{ item.proyecto.titulo }}</small>
+                        <hr class="my-2 text-muted">
+                        <div class="d-flex justify-content-between align-items-center text-muted small">
+                            <span><i class="fa-solid fa-user me-1"></i>{% if item.asignado_a %}{{ item.asignado_a.first_name|default:item.asignado_a.username }}{% else %}Sin asignar{% endif %}</span>
+                            <span>{{ item.rol_responsable|default:"Sin rol" }}</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-center text-muted small py-4 sin-tareas">Sin correcciones pendientes</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Aprobados -->
+        <div class="col-md-3">
+            <div class="card bg-light border-0 shadow-sm rounded-3">
+                <div class="card-header bg-success bg-opacity-25 border-0 fw-bold text-dark py-3" id="step-aprobados">
+                    <i class="fa-solid fa-circle-check me-1"></i> Aprobados
+                </div>
+                <div class="card-body p-2 kanban-col" data-estado="APROBADO" style="min-height: 450px;">
+                    {% for item in aprobados %}
+                    <div class="card border-0 shadow-sm mb-2 p-3 rounded-3 border-start border-4 border-success kanban-card" data-id="{{ item.id }}" style="cursor: pointer;">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="fw-bold text-dark mb-0 item-titulo">{{ item.titulo }}</h6>
+                            <span class="badge bg-success">Completado</span>
+                        </div>
+                        <small class="text-muted d-block"><i class="fa-solid fa-folder me-1"></i>{{ item.proyecto.titulo }}</small>
+                        <hr class="my-2 text-muted">
+                        <div class="d-flex justify-content-between align-items-center text-muted small">
+                            <span><i class="fa-solid fa-user me-1"></i>{% if item.asignado_a %}{{ item.asignado_a.first_name|default:item.asignado_a.username }}{% else %}Sin asignar{% endif %}</span>
+                            <span>{{ item.horas_reales|default:0 }}h reales</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-center text-muted small py-4 sin-tareas">No hay tareas aprobadas</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Formulario -->
+<div class="modal fade" id="modalNuevoEntregable" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-palette text-warning me-2"></i> Crear Nuevo Arte o Entregable</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label fw-bold">Proyecto</label>{{ form.proyecto }}</div>
+                        <div class="col-md-6"><label class="form-label fw-bold">Título de la Pieza</label>{{ form.titulo }}</div>
+                        <div class="col-md-6"><label class="form-label fw-bold text-primary">Rol Responsable</label>{{ form.rol_responsable }}</div>
+                        <div class="col-md-6"><label class="form-label fw-bold text-primary">Asignado a</label>{{ form.asignado_a }}</div>
+                        <div class="col-md-4"><label class="form-label fw-bold">Horas Estimadas</label>{{ form.horas_estimadas }}</div>
+                        <div class="col-md-4"><label class="form-label fw-bold">Horas Reales</label>{{ form.horas_reales }}</div>
+                        <div class="col-md-4"><label class="form-label fw-bold text-danger">Horas Revisión</label>{{ form.horas_revision }}</div>
+                        <div class="col-md-6"><label class="form-label fw-bold">Estado Inicial</label>{{ form.estado }}</div>
+                        <div class="col-md-6"><label class="form-label fw-bold">Fecha de Entrega</label>{{ form.fecha_entrega }}</div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">Guardar Arte</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPT DE INTERACCIÓN -->
+<script>
+$(document).ready(function() {
+    let selectedCard = null;
+
+    function actualizarEstadoBackend(entregableId, nuevoEstado) {
+        $.ajax({
+            url: "{% url 'kanban' %}",
+            type: "POST",
+            data: {
+                'entregable_id': entregableId,
+                'estado': nuevoEstado,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            },
+            success: function() { console.log('OK'); },
+            error: function(e) { console.error(e); }
+        });
+    }
+
+    // 1. DRAG & DROP
+    $(".kanban-card").draggable({
+        revert: "invalid",
+        cursor: "grab",
+        start: function() {
+            $(".kanban-card").removeClass("selected-card");
+            selectedCard = $(this);
+            $(this).addClass("selected-card");
+        }
+    });
+
+    $(".kanban-col").droppable({
+        accept: ".kanban-card",
+        drop: function(event, ui) {
+            let card = ui.draggable;
+            let targetCol = $(this);
+            let nuevoEstado = targetCol.data("estado");
+
+            card.detach().css({top: 0, left: 0}).appendTo(targetCol);
+            targetCol.find('.sin-tareas').hide();
+            actualizarEstadoBackend(card.data('id'), nuevoEstado);
+        }
+    });
+
+    // Seleccionar con Clic
+    $(document).on("click", ".kanban-card", function(e) {
+        e.stopPropagation();
+        $(".kanban-card").removeClass("selected-card");
+        selectedCard = $(this);
+        selectedCard.addClass("selected-card");
+    });
+
+    $(document).on("click", function() {
+        $(".kanban-card").removeClass("selected-card");
+        selectedCard = null;
+    });
+
+    // 2. CAPTURA DE ATAJO ROBUSTA CON Alt + K (Evita la selección azul del navegador)
+    window.addEventListener('keydown', function(e) {
+        if (e.altKey && (e.key === 'k' || e.key === 'K')) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (selectedCard) {
+                let targetAprobados = $('.kanban-col[data-estado="APROBADO"]');
+                let tituloTarea = selectedCard.find('.item-titulo').text().trim();
+                
+                selectedCard.detach().css({top: 0, left: 0}).appendTo(targetAprobados);
+                selectedCard.removeClass("selected-card").addClass("border-start border-4 border-success");
+                targetAprobados.find('.sin-tareas').hide();
+                
+                actualizarEstadoBackend(selectedCard.data('id'), 'APROBADO');
+                alert('¡Arte "' + tituloTarea + '" APROBADO!');
+                selectedCard = null;
+            } else {
+                alert('Haz clic en una tarjeta primero y luego presiona Alt + K');
+            }
+        }
+    }, true);
+
+    // 3. DRIVER.JS
+    const driver = window.driver.js.driver;
+    const driverObj = driver({
+        showProgress: true,
+        steps: [
+            { element: '#step-pendientes', popover: { title: '1. Pendientes', description: 'Artes pendientes.' } },
+            { element: '#step-proceso', popover: { title: '2. En Proceso', description: 'Artes en trabajo.' } },
+            { element: '#step-revisiones', popover: { title: '3. Correcciones', description: 'Ajustes de clientes.' } },
+            { element: '#step-aprobados', popover: { title: '4. Aprobados', description: 'Haz clic en una tarjeta y presiona Alt + K para aprobar.' } },
+            { element: '#btnNuevoArte', popover: { title: 'Nuevo Arte', description: 'Crea entregables.' } }
+        ]
+    });
+
+    $("#btnTourGuiado").on("click", function() {
+        driverObj.drive();
+    });
+});
+</script>
+{% endblock %}
