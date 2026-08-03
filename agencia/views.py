@@ -1,12 +1,26 @@
+import io
 import json
+import re
+import unicodedata
 from decimal import Decimal
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, Count, Q
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib import messages
+from django.template.exceptions import TemplateDoesNotExist
+from django.core.mail import send_mail, EmailMessage
+from django.conf import settings
+
+# Módulos para generación de PDF con ReportLab
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 from .models import Cliente, Campana, Proyecto, Entregable, Revision
 from .forms import (
@@ -17,6 +31,69 @@ from .forms import (
     UsuarioEquipoForm,
     RevisionForm
 )
+
+
+# Función auxiliar para eliminar caracteres especiales y acentos para SMTP y nombres de archivo
+def limpiar_texto_ascii(texto):
+    if not texto:
+        return ""
+    # Descompone caracteres unicode (ej: 'ñ' -> 'n', 'á' -> 'a')
+    texto_norm = unicodedata.normalize('NFD', str(texto))
+    # Filtra solo los caracteres sin acentos/diacríticos
+    texto_ascii = "".join(c for c in texto_norm if unicodedata.category(c) != 'Mn')
+    return texto_ascii
+
+
+# ==========================================
+# 0. VISTA DE BIENVENIDA / LANDING PAGE
+# ==========================================
+def inicio(request):
+    if request.user.is_authenticated:
+        if request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser:
+            return redirect('kanban')
+        return redirect('dashboard')
+    
+    try:
+        return render(request, 'core/inicio.html')
+    except TemplateDoesNotExist:
+        return render(request, 'inicio.html')
+
+
+# ==========================================
+# AUTENTICACIÓN: LOGIN Y LOGOUT
+# ==========================================
+def login_view(request):
+    if request.user.is_authenticated:
+        if request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser:
+            return redirect('kanban')
+        return redirect('dashboard')
+        
+    if request.method == 'POST':
+        u = request.POST.get('username')
+        p = request.POST.get('password')
+        user = authenticate(request, username=u, password=p)
+        
+        if user is not None:
+            auth_login(request, user)
+            if user.groups.filter(name='Cliente').exists() and not user.is_superuser:
+                messages.success(request, f"¡Bienvenido de nuevo, {user.first_name or user.username}!")
+                return redirect('kanban')
+            else:
+                messages.success(request, f"Panel de Control - Bienvenido Administrador {user.username}")
+                return redirect('dashboard')
+        else:
+            messages.error(request, "Usuario o contraseña incorrectos.")
+            
+    try:
+        return render(request, 'core/login.html')
+    except TemplateDoesNotExist:
+        return render(request, 'login.html')
+
+
+def logout_view(request):
+    auth_logout(request)
+    messages.info(request, "Has cerrado sesión correctamente.")
+    return redirect('inicio')
 
 
 # ==========================================
@@ -38,14 +115,14 @@ def solo_administrador(view_func):
 # 1. DASHBOARD COMPLETO CON ANALYTICS
 # ==========================================
 @login_required
-@solo_administrador
 def dashboard(request):
-    # Métricas generales
-    proyectos_activos = Proyecto.objects.filter(estado__in=['NUEVO', 'EN_PROCESO', 'REVISION']).count()
+    if request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser:
+        return redirect('kanban')
+
+    proyectos_activos = Proyecto.objects.filter(estado__in=['NUEVO', 'EN_PROCESO', 'REVISION']).count() if hasattr(Proyecto, 'estado') else Proyecto.objects.count()
     total_clientes = Cliente.objects.count()
     tareas_pendientes = Entregable.objects.filter(estado__in=['PENDIENTE', 'EN_PROCESO', 'CORRECCION']).count()
     
-    # 1.1 Carga de trabajo agrupada por Diseñador y Copywriter
     carga_disenadores = Entregable.objects.filter(
         rol_responsable='DISEÑADOR'
     ).exclude(
@@ -68,23 +145,24 @@ def dashboard(request):
         horas_totales=Sum('horas_estimadas')
     )
 
-    # 1.2 Reporte de Rentabilidad por Cliente
-    # Fórmula: Rentabilidad = Presupuesto - (Horas Totales Invertidas * Costo Operativo $25/h)
     COSTO_POR_HORA = Decimal('25.0')
     reporte_rentabilidad = []
     
     for cli in Cliente.objects.all():
-        entregables_cliente = Entregable.objects.filter(proyecto__campana__cliente=cli)
+        # CORRECCIÓN: Se filtra pasando limpiamente por la relación de campaña
+        entregables_cliente = Entregable.objects.filter(
+            proyecto__campana__cliente=cli
+        )
         
         total_horas_invertidas = entregables_cliente.aggregate(Sum('horas_reales'))['horas_reales__sum'] or Decimal('0.0')
         total_horas_revision = entregables_cliente.aggregate(Sum('horas_revision'))['horas_revision__sum'] or Decimal('0.0')
         
-        presupuesto = Decimal(str(cli.presupuesto_total)) if cli.presupuesto_total else Decimal('0.0')
+        presupuesto = Decimal(str(cli.presupuesto_total)) if hasattr(cli, 'presupuesto_total') and cli.presupuesto_total else Decimal('0.0')
         costo_total = (total_horas_invertidas + total_horas_revision) * COSTO_POR_HORA
         rentabilidad = presupuesto - costo_total
 
         reporte_rentabilidad.append({
-            'cliente': cli.nombre_empresa,
+            'cliente': getattr(cli, 'nombre_empresa', str(cli)),
             'presupuesto': presupuesto,
             'horas_invertidas': total_horas_invertidas,
             'horas_revision': total_horas_revision,
@@ -93,7 +171,6 @@ def dashboard(request):
             'es_rentable': rentabilidad >= Decimal('0.0')
         })
 
-    # 1.3 Horas Rebasadas en Revisiones o Estimación
     entregables_con_exceso_revision = Entregable.objects.filter(
         Q(horas_revision__gt=0) | Q(horas_reales__gt=Decimal('0.0'))
     ).select_related('proyecto', 'asignado_a')
@@ -107,7 +184,11 @@ def dashboard(request):
         'reporte_rentabilidad': reporte_rentabilidad,
         'entregables_revision': entregables_con_exceso_revision,
     }
-    return render(request, 'core/dashboard.html', context)
+    
+    try:
+        return render(request, 'core/dashboard.html', context)
+    except TemplateDoesNotExist:
+        return render(request, 'dashboard.html', context)
 
 
 # ==========================================
@@ -126,7 +207,10 @@ def crear_cliente(request):
         form = ClienteForm()
     
     clientes = Cliente.objects.all().order_by('-id')
-    return render(request, 'core/clientes.html', {'form': form, 'clientes': clientes})
+    try:
+        return render(request, 'core/clientes.html', {'form': form, 'clientes': clientes})
+    except TemplateDoesNotExist:
+        return render(request, 'clientes.html', {'form': form, 'clientes': clientes})
 
 
 @login_required
@@ -142,7 +226,10 @@ def crear_campana(request):
         form = CampanaForm()
 
     campanas = Campana.objects.select_related('cliente').all().order_by('-id')
-    return render(request, 'core/campanas.html', {'form': form, 'campanas': campanas})
+    try:
+        return render(request, 'core/campanas.html', {'form': form, 'campanas': campanas})
+    except TemplateDoesNotExist:
+        return render(request, 'campanas.html', {'form': form, 'campanas': campanas})
 
 
 @login_required
@@ -158,7 +245,10 @@ def crear_proyecto(request):
         form = ProyectoForm()
 
     proyectos = Proyecto.objects.select_related('campana__cliente').all().order_by('-id')
-    return render(request, 'core/proyectos.html', {'form': form, 'proyectos': proyectos})
+    try:
+        return render(request, 'core/proyectos.html', {'form': form, 'proyectos': proyectos})
+    except TemplateDoesNotExist:
+        return render(request, 'proyectos.html', {'form': form, 'proyectos': proyectos})
 
 
 @login_required
@@ -193,17 +283,191 @@ def crear_usuario(request):
                     }
                 )
 
-            messages.success(request, f'Usuario {usuario.username} creado correctamente.')
+                # 📧 ENVÍO REAL DE CORREO AL CLIENTE
+                if usuario.email:
+                    nombre_limpio = limpiar_texto_ascii(usuario.first_name or usuario.username)
+                    asunto = "Accesos a tu panel de cliente - AgencyOS"
+                    mensaje = (
+                        f"Hola {nombre_limpio},\n\n"
+                        f"Tu cuenta de Cliente ha sido creada correctamente.\n\n"
+                        f"Detalles de acceso:\n"
+                        f"- Usuario: {usuario.username}\n"
+                        f"- Panel de Control: http://127.0.0.1:8000/login/\n\n"
+                        f"Desde el panel podras ver tus tableros, cronogramas y aprobar avances.\n\n"
+                        f"Atentamente,\nEl Equipo de la Agencia."
+                    )
+                    try:
+                        send_mail(
+                            asunto,
+                            mensaje,
+                            settings.DEFAULT_FROM_EMAIL,
+                            [usuario.email],
+                            fail_silently=False
+                        )
+                        messages.success(request, f'Usuario {usuario.username} registrado. ¡Correo enviado a {usuario.email}!')
+                    except Exception as e:
+                        messages.warning(request, f'Usuario creado, pero no se pudo enviar el correo: {e}')
+
             return redirect('crear_usuario')
     else:
         form = UsuarioEquipoForm()
 
     usuarios = User.objects.all().order_by('-date_joined')
-    return render(request, 'core/usuarios.html', {'form': form, 'usuarios': usuarios})
+    try:
+        return render(request, 'core/usuarios.html', {'form': form, 'usuarios': usuarios})
+    except TemplateDoesNotExist:
+        return render(request, 'usuarios.html', {'form': form, 'usuarios': usuarios})
 
 
 # ==========================================
-# 3. TABLERO KANBAN
+# 3. ENVÍO DE REPORTES PDF POR CORREO
+# ==========================================
+@login_required
+@solo_administrador
+def enviar_reporte_pdf_cliente(request, cliente_id):
+    """Genera un PDF dinámico con proyectos y entregables del cliente y lo envía por correo."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    
+    destino_email = cliente.email or (cliente.usuario.email if cliente.usuario and cliente.usuario.email else None)
+
+    if not destino_email:
+        messages.error(request, f"El cliente '{cliente.nombre_empresa}' no tiene un correo asignado.")
+        return redirect('crear_cliente')
+
+    # Nombres limpios para evitar errores con UTF-8/SMTP
+    empresa_limpia = limpiar_texto_ascii(cliente.nombre_empresa)
+    contacto_limpio = limpiar_texto_ascii(cliente.contacto_nombre or cliente.nombre_empresa)
+
+    # ----------------------------------------------------
+    # OBTENCIÓN DE DATOS
+    # ----------------------------------------------------
+    campanas_ids = Campana.objects.filter(cliente=cliente).values_list('id', flat=True)
+    
+    # Proyectos vinculados a las campañas del cliente
+    proyectos = Proyecto.objects.filter(campana__in=campanas_ids).distinct()
+
+    # Entregables asociados a esos proyectos o cliente
+    entregables = Entregable.objects.filter(
+        Q(proyecto__in=proyectos) | Q(proyecto__campana__cliente=cliente)
+    ).select_related('proyecto').distinct()
+
+    # ----------------------------------------------------
+    # CONSTRUCCIÓN DEL PDF CON REPORTLAB
+    # ----------------------------------------------------
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        rightMargin=36, 
+        leftMargin=36, 
+        topMargin=36, 
+        bottomMargin=36
+    )
+    story = []
+    styles = getSampleStyleSheet()
+
+    # Estilos
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0f172a'), spaceAfter=6)
+    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#475569'), spaceAfter=12)
+    section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#1e293b'), spaceBefore=10, spaceAfter=8)
+    cell_style = ParagraphStyle('CellStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#334155'))
+    cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#0f172a'), fontName='Helvetica-Bold')
+
+    # Encabezado principal del PDF
+    story.append(Paragraph("<b>REPORTE OFICIAL DE ESTADO DE PROYECTOS</b>", title_style))
+    story.append(Paragraph(f"<b>Cliente:</b> {empresa_limpia} &nbsp;|&nbsp; <b>Contacto:</b> {contacto_limpio} &nbsp;|&nbsp; <b>Sistema:</b> AgencyOS", subtitle_style))
+    story.append(Spacer(1, 5))
+
+    # SECCIÓN 1: PROYECTOS
+    story.append(Paragraph("<b>1. Resumen de Proyectos</b>", section_style))
+    data_proyectos = [["Nombre del Proyecto", "Campaña", "Estado / Descripción"]]
+
+    for proy in proyectos:
+        nombre_p = Paragraph(limpiar_texto_ascii(getattr(proy, 'titulo', getattr(proy, 'nombre_proyecto', getattr(proy, 'nombre', str(proy))))), cell_bold)
+        campana_p = Paragraph(limpiar_texto_ascii(str(proy.campana)) if hasattr(proy, 'campana') and proy.campana else "General", cell_style)
+        estado_p = Paragraph(limpiar_texto_ascii(proy.get_estado_display() if hasattr(proy, 'get_estado_display') else getattr(proy, 'estado', 'Activo')), cell_style)
+        data_proyectos.append([nombre_p, campana_p, estado_p])
+
+    if len(data_proyectos) == 1:
+        data_proyectos.append([Paragraph("Sin proyectos asignados", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style)])
+
+    t_proyectos = Table(data_proyectos, colWidths=[200, 160, 170])
+    t_proyectos.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e293b')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(t_proyectos)
+    story.append(Spacer(1, 10))
+
+    # SECCIÓN 2: ENTREGABLES
+    story.append(Paragraph("<b>2. Detalle de Entregables</b>", section_style))
+    data_entregables = [["Proyecto", "Entregable / Tarea", "Estado", "Fecha Entrega"]]
+
+    for item in entregables:
+        nombre_proy = Paragraph(limpiar_texto_ascii(getattr(item.proyecto, 'titulo', getattr(item.proyecto, 'nombre_proyecto', getattr(item.proyecto, 'nombre', str(item.proyecto))))), cell_bold)
+        titulo_ent = Paragraph(limpiar_texto_ascii(getattr(item, 'titulo', getattr(item, 'nombre', 'Entregable'))), cell_style)
+        estado_ent = Paragraph(limpiar_texto_ascii(item.get_estado_display() if hasattr(item, 'get_estado_display') else item.estado), cell_style)
+        fecha_ent = Paragraph(item.fecha_entrega.strftime('%d/%m/%Y') if hasattr(item, 'fecha_entrega') and item.fecha_entrega else 'Pendiente', cell_style)
+        
+        data_entregables.append([nombre_proy, titulo_ent, estado_ent, fecha_ent])
+
+    if len(data_entregables) == 1:
+        data_entregables.append([Paragraph("Sin entregables registrados", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style)])
+
+    t_entregables = Table(data_entregables, colWidths=[150, 180, 100, 100])
+    t_entregables.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(t_entregables)
+
+    # Compilar el archivo PDF
+    doc.build(story)
+    pdf_data = buffer.getvalue()
+    buffer.close()
+
+    # ----------------------------------------------------
+    # ENVÍO DEL CORREO
+    # ----------------------------------------------------
+    slug_empresa = re.sub(r'[^a-zA-Z0-9_]', '_', empresa_limpia)
+    nombre_archivo_adjunto = f"Reporte_{slug_empresa}.pdf"
+
+    asunto_texto = f"Reporte de Avances - {empresa_limpia}"
+    cuerpo = (
+        f"Hola {contacto_limpio},\n\n"
+        f"Adjunto a este correo encontraras el reporte actualizado en PDF con el estado de tus proyectos y entregables.\n\n"
+        f"Atentamente,\nEl Equipo de AgencyOS."
+    )
+
+    try:
+        email = EmailMessage(
+            subject=asunto_texto,
+            body=cuerpo,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[destino_email],
+        )
+        email.attach(nombre_archivo_adjunto, pdf_data, 'application/pdf')
+        email.send(fail_silently=False)
+
+        messages.success(request, f"🚀 ¡Reporte PDF enviado con éxito a {destino_email}!")
+    except Exception as e:
+        messages.error(request, f"Ocurrió un error al enviar el correo: {e}")
+
+    return redirect('crear_cliente')
+
+
+# ==========================================
+# 4. TABLERO KANBAN
 # ==========================================
 @login_required
 def kanban_view(request):
@@ -218,7 +482,6 @@ def kanban_view(request):
     else:
         form = EntregableForm()
 
-    # Si el usuario logueado es un Cliente, filtrar únicamente sus entregables
     if es_cliente:
         base_qs = Entregable.objects.filter(
             proyecto__campana__cliente__usuario=request.user
@@ -234,11 +497,15 @@ def kanban_view(request):
         'aprobados': base_qs.filter(estado='APROBADO'),
         'es_cliente': es_cliente,
     }
-    return render(request, 'core/kanban.html', context)
+    
+    try:
+        return render(request, 'core/kanban.html', context)
+    except TemplateDoesNotExist:
+        return render(request, 'kanban.html', context)
 
 
 # ==========================================
-# 4. ENTIDAD REVISIONES (REGISTRO DE AJUSTES)
+# 5. ENTIDAD REVISIONES (REGISTRO DE AJUSTES)
 # ==========================================
 @login_required
 def agregar_revision(request, entregable_id):
@@ -252,8 +519,10 @@ def agregar_revision(request, entregable_id):
             revision.realizado_por = request.user
             revision.save()
 
-            # Sumar las horas de la revisión al acumulado del entregable y pasar a estado de Corrección
-            entregable.horas_revision = Decimal(str(entregable.horas_revision)) + Decimal(str(revision.horas_adicionales))
+            horas_actuales = Decimal(str(entregable.horas_revision or 0))
+            horas_adicionales = Decimal(str(getattr(revision, 'horas_adicionales', 0) or 0))
+            
+            entregable.horas_revision = horas_actuales + horas_adicionales
             entregable.estado = 'CORRECCION'
             entregable.save()
 
@@ -262,11 +531,14 @@ def agregar_revision(request, entregable_id):
     else:
         form = RevisionForm()
 
-    return render(request, 'core/agregar_revision.html', {'form': form, 'entregable': entregable})
+    try:
+        return render(request, 'core/agregar_revision.html', {'form': form, 'entregable': entregable})
+    except TemplateDoesNotExist:
+        return render(request, 'agregar_revision.html', {'form': form, 'entregable': entregable})
 
 
 # ==========================================
-# 5. VISTA DE CRONOGRAMA
+# 6. VISTA DE CRONOGRAMA
 # ==========================================
 @login_required
 def cronograma_view(request):
@@ -278,20 +550,24 @@ def cronograma_view(request):
         ).select_related('proyecto', 'asignado_a').order_by('fecha_entrega')
         proyectos = Proyecto.objects.filter(
             campana__cliente__usuario=request.user
-        ).order_by('fecha_limite')
+        ).order_by('fecha_limite') if hasattr(Proyecto, 'fecha_limite') else Proyecto.objects.none()
     else:
         entregables = Entregable.objects.select_related('proyecto', 'asignado_a').order_by('fecha_entrega')
-        proyectos = Proyecto.objects.all().order_by('fecha_limite')
+        proyectos = Proyecto.objects.all().order_by('fecha_limite') if hasattr(Proyecto, 'fecha_limite') else Proyecto.objects.all()
     
     context = {
         'entregables': entregables,
         'proyectos': proyectos,
     }
-    return render(request, 'core/cronograma.html', context)
+    
+    try:
+        return render(request, 'core/cronograma.html', context)
+    except TemplateDoesNotExist:
+        return render(request, 'cronograma.html', context)
 
 
 # ==========================================
-# 6. APIS (JSON)
+# 7. APIS (JSON)
 # ==========================================
 @login_required
 def api_eventos_entregables(request):
@@ -313,15 +589,16 @@ def api_eventos_entregables(request):
     }
 
     for e in entregables:
-        if e.fecha_entrega:
+        if hasattr(e, 'fecha_entrega') and e.fecha_entrega:
             nombre_proyecto = getattr(e.proyecto, 'titulo', getattr(e.proyecto, 'nombre_proyecto', 'Proyecto'))
+            titulo_entregable = getattr(e, 'titulo', getattr(e, 'nombre', 'Entregable'))
             eventos.append({
                 'id': e.id,
-                'title': f"{e.titulo} ({nombre_proyecto})",
+                'title': f"{titulo_entregable} ({nombre_proyecto})",
                 'start': e.fecha_entrega.isoformat(),
                 'color': color_map.get(e.estado, '#6c757d'),
                 'extendedProps': {
-                    'estado': e.get_estado_display(),
+                    'estado': e.get_estado_display() if hasattr(e, 'get_estado_display') else e.estado,
                     'responsable': e.asignado_a.username if e.asignado_a else 'Sin asignar',
                     'rol': getattr(e, 'rol_responsable', 'Sin Rol'),
                 }
@@ -341,6 +618,22 @@ def cambiar_estado_entregable(request, entregable_id):
             entregable = get_object_or_404(Entregable, id=entregable_id)
             entregable.estado = nuevo_estado
             entregable.save()
+
+            # Notificar por correo si cambia a estado REVISION
+            if nuevo_estado == 'REVISION':
+                cliente_user = getattr(getattr(getattr(entregable, 'proyecto', None), 'campana', None), 'cliente', None)
+                if cliente_user:
+                    cliente_user = getattr(cliente_user, 'usuario', None)
+                if cliente_user and cliente_user.email:
+                    titulo_limpio = limpiar_texto_ascii(getattr(entregable, 'titulo', 'Entregable'))
+                    nombre_user_limpio = limpiar_texto_ascii(cliente_user.first_name or cliente_user.username)
+                    send_mail(
+                        f"Avance listo para revision: {titulo_limpio}",
+                        f"Hola {nombre_user_limpio},\n\nEl entregable esta listo para tu aprobacion.",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [cliente_user.email],
+                        fail_silently=True
+                    )
 
             return JsonResponse({'status': 'success', 'nuevo_estado': entregable.estado})
         except Exception as e:

@@ -1,72 +1,99 @@
 {% extends 'base.html' %}
 
-{% block title %}Clientes - AgenciaOS{% endblock %}
+{% block title %}Gestión de Clientes - AgencyOS{% endblock %}
 {% block header %}Gestión de Clientes{% endblock %}
 
 {% block content %}
-<div class="row">
-    <!-- Formulario -->
-    <div class="col-md-4 mb-4">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0">👤 Registrar Cliente</h5>
+<div class="row g-4">
+    <!-- Formulario de Registro de Cliente -->
+    <div class="col-lg-4">
+        <div class="card bg-slate-800 border-secondary border-opacity-25 text-white shadow-sm rounded-4">
+            <div class="card-header bg-transparent border-secondary border-opacity-25 py-3">
+                <h5 class="card-title mb-0 fw-bold">
+                    <i class="fa-solid fa-user-plus text-primary me-2"></i>Nuevo Cliente
+                </h5>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="post">
                     {% csrf_token %}
+                    
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Empresa</label>
+                        <label class="form-label small text-secondary fw-semibold">Nombre de la Empresa</label>
                         {{ form.nombre_empresa }}
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Nombre de Contacto</label>
+                        <label class="form-label small text-secondary fw-semibold">Nombre de Contacto</label>
                         {{ form.contacto_nombre }}
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Email</label>
+                        <label class="form-label small text-secondary fw-semibold">Correo Electrónico</label>
                         {{ form.email }}
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Teléfono</label>
-                        {{ form.telefono }}
+                        <label class="form-label small text-secondary fw-semibold">Presupuesto Asignado ($)</label>
+                        {{ form.presupuesto_total }}
                     </div>
-                    <button type="submit" class="btn btn-success w-100">Guardar Cliente</button>
+
+                    <button type="submit" class="btn btn-primary w-100 fw-bold mt-2">
+                        <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Cliente
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Tabla -->
-    <div class="col-md-8">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">👥 Clientes de la Agencia</h5>
+    <!-- Lista de Clientes con el Botón para Enviar PDF -->
+    <div class="col-lg-8">
+        <div class="card bg-slate-800 border-secondary border-opacity-25 text-white shadow-sm rounded-4">
+            <div class="card-header bg-transparent border-secondary border-opacity-25 py-3 d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0 fw-bold">
+                    <i class="fa-solid fa-building text-info me-2"></i>Clientes Registrados
+                </h5>
+                <span class="badge bg-secondary rounded-pill">{{ clientes.count }} registrados</span>
             </div>
             <div class="card-body p-0">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>Empresa</th>
-                            <th>Contacto</th>
-                            <th>Email</th>
-                            <th>Teléfono</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for c in clientes %}
-                        <tr>
-                            <td><strong>{{ c.nombre_empresa }}</strong></td>
-                            <td>{{ c.contacto_nombre }}</td>
-                            <td>{{ c.email }}</td>
-                            <td>{{ c.telefono|default:"-" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center py-4 text-muted">No hay clientes registrados.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 align-middle">
+                        <thead class="table-borderless text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-3">Empresa</th>
+                                <th>Contacto</th>
+                                <th>Correo</th>
+                                <th class="text-end pe-3">Enviar Reporte</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in clientes %}
+                            <tr>
+                                <td class="ps-3 fw-bold text-white">
+                                    <i class="fa-solid fa-briefcase text-primary me-2"></i>{{ c.nombre_empresa }}
+                                </td>
+                                <td>{{ c.contacto_nombre|default:"-" }}</td>
+                                <td class="small text-secondary">{{ c.email|default:"Sin correo" }}</td>
+                                <td class="text-end pe-3">
+                                    {% if c.email or c.usuario.email %}
+                                        <!-- BOTÓN DE ENVÍO DE PDF POR CORREO -->
+                                        <a href="{% url 'enviar_reporte_pdf_cliente' c.id %}" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-semibold">
+                                            <i class="fa-solid fa-file-pdf me-1"></i> Enviar PDF por Correo
+                                        </a>
+                                    {% else %}
+                                        <span class="badge bg-secondary text-uppercase" style="font-size: 0.65rem;">Sin Correo</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-secondary">
+                                    No hay clientes registrados en el sistema.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
