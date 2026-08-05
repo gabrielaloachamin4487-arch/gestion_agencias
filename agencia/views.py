@@ -862,3 +862,60 @@ def generar_reporte_pdf_cliente(request, cliente_id):
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="Reporte_{cliente.nombre_empresa}_{date.today().strftime("%Y%m%d")}.pdf"'
     return response
+
+@login_required
+def generar_comprobante_pdf_entregable(request, entregable_id):
+    """Genera un PDF de comprobante/ficha para un entregable especifico."""
+    entregable = get_object_or_404(Entregable, id=entregable_id)
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        rightMargin=36, 
+        leftMargin=36, 
+        topMargin=36, 
+        bottomMargin=36
+    )
+    story = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0f172a'), spaceAfter=4)
+    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#475569'), spaceAfter=12)
+    cell_style = ParagraphStyle('CellStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#334155'))
+    cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#0f172a'), fontName='Helvetica-Bold')
+
+    story.append(Paragraph("<b>COMPROBANTE DE ENTREGABLE</b>", title_style))
+    story.append(Paragraph(f"<b>AgencyOS Platform</b> | Generado el: {date.today().strftime('%d/%m/%Y')}", subtitle_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceAfter=12))
+
+    cliente_nombre = "N/A"
+    if entregable.proyecto and entregable.proyecto.campana and entregable.proyecto.campana.cliente:
+        cliente_nombre = entregable.proyecto.campana.cliente.nombre_empresa
+
+    datos = [
+        [Paragraph("<b>Título de la Pieza:</b>", cell_bold), Paragraph(entregable.titulo, cell_style)],
+        [Paragraph("<b>Estado Actual:</b>", cell_bold), Paragraph(entregable.get_estado_display(), cell_style)],
+        [Paragraph("<b>Cliente:</b>", cell_bold), Paragraph(cliente_nombre, cell_style)],
+        [Paragraph("<b>Proyecto:</b>", cell_bold), Paragraph(entregable.proyecto.titulo if entregable.proyecto else "N/A", cell_style)],
+        [Paragraph("<b>Creativo Asignado:</b>", cell_bold), Paragraph(entregable.creativo.usuario.get_full_name() if entregable.creativo else "Sin asignar", cell_style)],
+        [Paragraph("<b>Horas Estimadas:</b>", cell_bold), Paragraph(f"{entregable.horas_estimadas:.1f} hrs", cell_style)],
+        [Paragraph("<b>Horas Reales:</b>", cell_bold), Paragraph(f"{entregable.horas_reales:.1f} hrs", cell_style)],
+        [Paragraph("<b>Fecha Límite:</b>", cell_bold), Paragraph(entregable.fecha_limite.strftime('%d/%m/%Y') if getattr(entregable, 'fecha_limite', None) else "N/A", cell_style)],
+    ]
+
+    t_datos = Table(datos, colWidths=[130, 410])
+    t_datos.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+        ('PADDING', (0,0), (-1,-1), 6),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#f1f5f9')),
+    ]))
+    story.append(t_datos)
+
+    doc.build(story)
+    buffer.seek(0)
+
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Comprobante_Entregable_{entregable.id}.pdf"'
+    return response
