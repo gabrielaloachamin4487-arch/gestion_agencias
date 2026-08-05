@@ -63,33 +63,37 @@ def solo_administrador(view_func):
 def verificar_alertas_retraso():
     """Envía un correo automático de alerta al Director de Arte cuando un entregable 
     ha superado su Fecha Límite y no ha sido aprobado/subido."""
-    hoy = date.today()
-    entregables_retrasados = Entregable.objects.filter(
-        fecha_limite__lt=hoy
-    ).exclude(
-        estado__in=['APROBADO']
-    )
+    try:
+        hoy = date.today()
+        entregables_retrasados = Entregable.objects.filter(
+            fecha_limite__lt=hoy
+        ).exclude(
+            estado__in=['APROBADO']
+        )
 
-    if entregables_retrasados.exists():
-        directores = User.objects.filter(
-            Q(is_superuser=True) | Q(groups__name='Administrador') | Q(groups__name='Director de Arte')
-        ).distinct()
-        
-        emails_directores = [d.email for d in directores if d.email]
-        if emails_directores:
-            lista_titulos = "\n".join([f"- {e.titulo} (Proyecto: {e.proyecto.titulo}, Límite: {e.fecha_limite})" for e in entregables_retrasados[:10]])
-            asunto = "ALERTA: Entregables con Infracción de Tiempo / Retraso"
-            mensaje = (
-                f"Estimado Director de Arte / PM,\n\n"
-                f"Se han detectado los siguientes entregables retrasados que superaron su fecha límite:\n\n"
-                f"{lista_titulos}\n\n"
-                f"Por favor, revisa la asignación y carga de trabajo en la plataforma AgencyOS.\n\n"
-                f"Atentamente,\nSistema de Notificaciones AgencyOS"
-            )
-            try:
-                send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, emails_directores, fail_silently=True)
-            except Exception:
-                pass
+        if entregables_retrasados.exists():
+            directores = User.objects.filter(
+                Q(is_superuser=True) | Q(groups__name='Administrador') | Q(groups__name='Director de Arte')
+            ).distinct()
+            
+            emails_directores = [d.email for d in directores if d.email]
+            if emails_directores:
+                lista_titulos = "\n".join([f"- {e.titulo} (Proyecto: {e.proyecto.titulo}, Límite: {e.fecha_limite})" for e in entregables_retrasados[:10]])
+                asunto = "ALERTA: Entregables con Infracción de Tiempo / Retraso"
+                mensaje = (
+                    f"Estimado Director de Arte / PM,\n\n"
+                    f"Se han detectado los siguientes entregables retrasados que superaron su fecha límite:\n\n"
+                    f"{lista_titulos}\n\n"
+                    f"Por favor, revisa la asignación y carga de trabajo en la plataforma AgencyOS.\n\n"
+                    f"Atentamente,\nSistema de Notificaciones AgencyOS"
+                )
+                try:
+                    send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, emails_directores, fail_silently=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 
 
 # ==========================================
@@ -144,10 +148,18 @@ def logout_view(request):
 def dashboard(request):
     user = request.user
     es_cliente = user.groups.filter(name='Cliente').exists() and not user.is_superuser
-    es_creativo = hasattr(user, 'perfil_creativo') and not user.is_superuser
+    es_creativo = False
+    try:
+        es_creativo = hasattr(user, 'perfil_creativo') and user.perfil_creativo is not None and not user.is_superuser
+    except Exception:
+        es_creativo = False
 
     # Ejecutar verificación rápida de alertas de retraso
-    verificar_alertas_retraso()
+    try:
+        verificar_alertas_retraso()
+    except Exception:
+        pass
+
 
     if es_cliente:
         cliente = Cliente.objects.filter(usuario=user).first()
