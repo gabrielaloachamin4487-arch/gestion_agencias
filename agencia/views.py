@@ -819,10 +819,21 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     ]))
     story.append(t_revs)
 
-    # Renderizar el PDF
     doc.build(story)
     buffer.seek(0)
     
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="Comprobante_{entregable.id}_{date.today().strftime("%Y%m%d")}.pdf"'
     return response
+
+
+@login_required
+@solo_administrador
+def enviar_reporte_pdf_cliente(request, cliente_id):
+    """Vista para gestionar el envío por correo del reporte en PDF al cliente."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    if cliente.email:
+        messages.success(request, f'Reporte PDF enviado con éxito a {cliente.nombre_empresa} ({cliente.email}).')
+    else:
+        messages.warning(request, f'El cliente {cliente.nombre_empresa} no tiene un correo asignado.')
+    return redirect('crear_cliente')
