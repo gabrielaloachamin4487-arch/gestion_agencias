@@ -20,6 +20,8 @@ urlpatterns = [
     # 3. GESTIÓN DE ENTIDADES (SOLO ADMIN)
     # ==========================================
     path('clientes/', views.crear_cliente, name='crear_cliente'),
+    path('clientes/editar/<int:cliente_id>/', views.editar_cliente, name='editar_cliente'),
+    path('clientes/eliminar/<int:cliente_id>/', views.eliminar_cliente, name='eliminar_cliente'),
     path('campanas/', views.crear_campana, name='crear_campana'),
     path('proyectos/', views.crear_proyecto, name='crear_proyecto'),
     path('usuarios/', views.crear_usuario, name='crear_usuario'),

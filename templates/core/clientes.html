@@ -1,101 +1,161 @@
 {% extends 'base.html' %}
 
-{% block title %}Gestión de Clientes - AgencyOS{% endblock %}
-{% block header %}Gestión de Clientes{% endblock %}
-
 {% block content %}
-<div class="row g-4">
-    <!-- Formulario de Registro de Cliente -->
-    <div class="col-lg-4">
-        <div class="card bg-slate-800 border-secondary border-opacity-25 text-white shadow-sm rounded-4">
-            <div class="card-header bg-transparent border-secondary border-opacity-25 py-3">
-                <h5 class="card-title mb-0 fw-bold">
-                    <i class="fa-solid fa-user-plus text-primary me-2"></i>Nuevo Cliente
-                </h5>
-            </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label class="form-label small text-secondary fw-semibold">Nombre de la Empresa</label>
-                        {{ form.nombre_empresa }}
-                    </div>
+<!-- SweetAlert2 CDN (Estilos y Script) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-                    <div class="mb-3">
-                        <label class="form-label small text-secondary fw-semibold">Nombre de Contacto</label>
-                        {{ form.contacto_nombre }}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small text-secondary fw-semibold">Correo Electrónico</label>
-                        {{ form.email }}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small text-secondary fw-semibold">Presupuesto Asignado ($)</label>
-                        {{ form.presupuesto_total }}
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-100 fw-bold mt-2">
-                        <i class="fa-solid fa-floppy-disk me-1"></i> Guardar Cliente
-                    </button>
-                </form>
-            </div>
-        </div>
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-white font-weight-bold">Gestión de Clientes</h2>
+        <span class="badge bg-secondary text-white px-3 py-2">{{ clientes.count }} registrados</span>
     </div>
 
-    <!-- Lista de Clientes con el Botón para Enviar PDF -->
-    <div class="col-lg-8">
-        <div class="card bg-slate-800 border-secondary border-opacity-25 text-white shadow-sm rounded-4">
-            <div class="card-header bg-transparent border-secondary border-opacity-25 py-3 d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0 fw-bold">
-                    <i class="fa-solid fa-building text-info me-2"></i>Clientes Registrados
-                </h5>
-                <span class="badge bg-secondary rounded-pill">{{ clientes.count }} registrados</span>
+    <!-- Mensajes de Alerta del Sistema -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover mb-0 align-middle">
-                        <thead class="table-borderless text-secondary small text-uppercase">
-                            <tr>
-                                <th class="ps-3">Empresa</th>
-                                <th>Contacto</th>
-                                <th>Correo</th>
-                                <th class="text-end pe-3">Enviar Reporte</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for c in clientes %}
-                            <tr>
-                                <td class="ps-3 fw-bold text-white">
-                                    <i class="fa-solid fa-briefcase text-primary me-2"></i>{{ c.nombre_empresa }}
-                                </td>
-                                <td>{{ c.contacto_nombre|default:"-" }}</td>
-                                <td class="small text-secondary">{{ c.email|default:"Sin correo" }}</td>
-                                <td class="text-end pe-3">
-                                    {% if c.email or c.usuario.email %}
-                                        <!-- BOTÓN DE ENVÍO DE PDF POR CORREO -->
-                                        <a href="{% url 'enviar_reporte_pdf_cliente' c.id %}" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-semibold">
-                                            <i class="fa-solid fa-file-pdf me-1"></i> Enviar PDF por Correo
-                                        </a>
-                                    {% else %}
-                                        <span class="badge bg-secondary text-uppercase" style="font-size: 0.65rem;">Sin Correo</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center py-4 text-secondary">
-                                    No hay clientes registrados en el sistema.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Formulario Registrar / Editar Cliente -->
+        <div class="col-lg-4 mb-4">
+            <div class="card bg-dark text-white shadow-lg border-0 rounded-lg">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex align-items-center">
+                    <i class="fas fa-user-plus text-primary me-2 fs-5"></i>
+                    <h5 class="mb-0">{% if editando %}Editar Cliente{% else %}Registrar Cliente{% endif %}</h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="{% if editando %}{% url 'editar_cliente' form.instance.id %}{% else %}{% url 'crear_cliente' %}{% endif %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label text-muted small text-uppercase fw-bold">Nombre de la Empresa</label>
+                            {{ form.nombre_empresa }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small text-uppercase fw-bold">Nombre de Contacto</label>
+                            {{ form.contacto_nombre }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small text-uppercase fw-bold">Correo Electrónico</label>
+                            {{ form.email }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small text-uppercase fw-bold">Presupuesto Asignado ($)</label>
+                            {{ form.presupuesto_total }}
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn {% if editando %}btn-warning{% else %}btn-primary{% endif %} fw-bold py-2 mt-2">
+                                <i class="fas {% if editando %}fa-sync-alt{% else %}fa-save{% endif %} me-1"></i>
+                                {% if editando %}Actualizar Cliente{% else %}Guardar Cliente{% endif %}
+                            </button>
+                            {% if editando %}
+                                <a href="{% url 'crear_cliente' %}" class="btn btn-outline-secondary py-2">Cancelar Edición</a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Clientes -->
+        <div class="col-lg-8">
+            <div class="card bg-dark text-white shadow-lg border-0 rounded-lg">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover align-middle mb-0">
+                            <thead>
+                                <tr class="text-uppercase text-muted small border-bottom border-secondary">
+                                    <th class="ps-4" style="width: 25%;">Empresa</th>
+                                    <th style="width: 20%;">Contacto</th>
+                                    <th style="width: 30%;">Correo Electrónico</th>
+                                    <th class="text-center" style="width: 25%;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cliente in clientes %}
+                                <tr>
+                                    <td class="ps-4 fw-bold">
+                                        <i class="fas fa-briefcase text-primary me-2"></i>{{ cliente.nombre_empresa }}
+                                    </td>
+                                    <td>{{ cliente.contacto_nombre|default:"Sin contacto" }}</td>
+                                    <td>
+                                        {% if cliente.email %}
+                                            <a href="mailto:{{ cliente.email }}" class="text-info text-decoration-none fw-semibold">
+                                                <i class="far fa-envelope me-1"></i>{{ cliente.email }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">Sin correo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center py-3">
+                                        <div class="d-flex justify-content-center gap-1">
+                                            <!-- Botón Enviar PDF -->
+                                            <a href="{% url 'enviar_reporte_pdf_cliente' cliente.id %}" 
+                                               class="btn btn-outline-danger btn-sm" 
+                                               title="Enviar Reporte PDF por Correo">
+                                                <i class="fas fa-file-pdf"></i> PDF
+                                            </a>
+
+                                            <!-- Botón Editar -->
+                                            <a href="{% url 'editar_cliente' cliente.id %}" 
+                                               class="btn btn-outline-warning btn-sm" 
+                                               title="Editar Cliente">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+
+                                            <!-- Botón Eliminar Estilizado -->
+                                            <button type="button" 
+                                                    class="btn btn-outline-danger btn-sm" 
+                                                    title="Eliminar Cliente"
+                                                    onclick="confirmarEliminacion('{{ cliente.nombre_empresa }}', '{% url 'eliminar_cliente' cliente.id %}')">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-4 text-muted">
+                                        No hay clientes registrados actualmente.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Modal / Ventana Elegante con SweetAlert2 -->
+<script>
+function confirmarEliminacion(nombreEmpresa, urlEliminar) {
+    SweetAlert.fire({
+        title: '¿Eliminar cliente?',
+        html: `¿Estás seguro de eliminar a <b>${nombreEmpresa}</b>?<br><br><span style="color: #ef4444; font-size: 0.9em;">⚠️ Se borrarán en cascada todas sus campañas, proyectos y entregables.</span>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#4b5563',
+        confirmButtonText: '<i class="fas fa-trash-alt me-1"></i> Sí, eliminar todo',
+        cancelButtonText: 'Cancelar',
+        background: '#1e293b',
+        color: '#ffffff',
+        customClass: {
+            popup: 'border border-secondary rounded-4 shadow-lg'
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = urlEliminar;
+        }
+    });
+}
+</script>
 {% endblock %}

@@ -1,9 +1,16 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+
 class Cliente(models.Model):
     # Relación opcional con User para permitir inicio de sesión a clientes
-    usuario = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='perfil_cliente')
+    usuario = models.OneToOneField(
+        User, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='perfil_cliente'
+    )
     nombre_empresa = models.CharField(max_length=150)
     contacto_nombre = models.CharField(max_length=100)
     email = models.EmailField()
@@ -13,8 +20,13 @@ class Cliente(models.Model):
     def __str__(self):
         return self.nombre_empresa
 
+
 class Campana(models.Model):
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='campanas')
+    cliente = models.ForeignKey(
+        Cliente, 
+        on_delete=models.CASCADE, 
+        related_name='campanas'
+    )
     nombre = models.CharField(max_length=150)
     presupuesto = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     fecha_inicio = models.DateField(null=True, blank=True)
@@ -23,6 +35,7 @@ class Campana(models.Model):
     def __str__(self):
         return f"{self.nombre} - {self.cliente.nombre_empresa}"
 
+
 class Proyecto(models.Model):
     ESTADOS = [
         ('NUEVO', 'Nuevo'),
@@ -30,7 +43,11 @@ class Proyecto(models.Model):
         ('REVISION', 'En Revisión'),
         ('FINALIZADO', 'Finalizado'),
     ]
-    campana = models.ForeignKey(Campana, on_delete=models.CASCADE, related_name='proyectos')
+    campana = models.ForeignKey(
+        Campana, 
+        on_delete=models.CASCADE, 
+        related_name='proyectos'
+    )
     titulo = models.CharField(max_length=150)
     descripcion = models.TextField(blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='NUEVO')
@@ -38,6 +55,7 @@ class Proyecto(models.Model):
 
     def __str__(self):
         return self.titulo
+
 
 class Entregable(models.Model):
     ESTADOS = [
@@ -50,9 +68,19 @@ class Entregable(models.Model):
         ('DISEÑADOR', 'Diseñador'),
         ('COPYWRITER', 'Copywriter'),
     ]
-    proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE, related_name='entregables')
+    proyecto = models.ForeignKey(
+        Proyecto, 
+        on_delete=models.CASCADE, 
+        related_name='entregables'
+    )
     titulo = models.CharField(max_length=150)
-    asignado_a = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='entregables')
+    asignado_a = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='entregables'
+    )
     rol_responsable = models.CharField(max_length=20, choices=ROLES, default='DISEÑADOR')
     fecha_entrega = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='PENDIENTE')
@@ -65,10 +93,19 @@ class Entregable(models.Model):
     def __str__(self):
         return f"{self.titulo} ({self.proyecto.titulo})"
 
-# NUEVA ENTIDAD: Historial de Revisiones / Ajustes de Artes
+
 class Revision(models.Model):
-    entregable = models.ForeignKey(Entregable, on_delete=models.CASCADE, related_name='revisiones')
-    realizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    entregable = models.ForeignKey(
+        Entregable, 
+        on_delete=models.CASCADE, 
+        related_name='revisiones'
+    )
+    realizado_por = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
     comentario = models.TextField()
     horas_adicionales = models.DecimalField(max_digits=5, decimal_places=2, default=1.00)
     fecha = models.DateTimeField(auto_now_add=True)

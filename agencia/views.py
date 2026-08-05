@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.db.models import Sum, Count, Q
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.decorators import login_required
@@ -33,13 +34,11 @@ from .forms import (
 )
 
 
-# Función auxiliar para eliminar caracteres especiales y acentos para SMTP y nombres de archivo
+# Función auxiliar para eliminar caracteres especiales y acentos
 def limpiar_texto_ascii(texto):
     if not texto:
         return ""
-    # Descompone caracteres unicode (ej: 'ñ' -> 'n', 'á' -> 'a')
     texto_norm = unicodedata.normalize('NFD', str(texto))
-    # Filtra solo los caracteres sin acentos/diacríticos
     texto_ascii = "".join(c for c in texto_norm if unicodedata.category(c) != 'Mn')
     return texto_ascii
 
@@ -90,6 +89,8 @@ def login_view(request):
         return render(request, 'login.html')
 
 
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
 def logout_view(request):
     auth_logout(request)
     messages.info(request, "Has cerrado sesión correctamente.")
@@ -149,7 +150,6 @@ def dashboard(request):
     reporte_rentabilidad = []
     
     for cli in Cliente.objects.all():
-        # CORRECCIÓN: Se filtra pasando limpiamente por la relación de campaña
         entregables_cliente = Entregable.objects.filter(
             proyecto__campana__cliente=cli
         )
@@ -192,7 +192,7 @@ def dashboard(request):
 
 
 # ==========================================
-# 2. VISTAS DE CREACIÓN Y GESTIÓN (ADMIN)
+# 2. VISTAS DE CLIENTES (CREAR, EDITAR, ELIMINAR CON CASCADA)
 # ==========================================
 @login_required
 @solo_administrador
@@ -213,6 +213,48 @@ def crear_cliente(request):
         return render(request, 'clientes.html', {'form': form, 'clientes': clientes})
 
 
+@login_required
+@solo_administrador
+def editar_cliente(request, cliente_id):
+    """Permite editar los datos de un cliente existente."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    if request.method == 'POST':
+        form = ClienteForm(request.POST, instance=cliente)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Cliente "{cliente.nombre_empresa}" actualizado correctamente.')
+            return redirect('crear_cliente')
+    else:
+        form = ClienteForm(instance=cliente)
+
+    try:
+        return render(request, 'core/editar_cliente.html', {'form': form, 'cliente': cliente})
+    except TemplateDoesNotExist:
+        return render(request, 'editar_cliente.html', {'form': form, 'cliente': cliente})
+
+
+@login_required
+@solo_administrador
+def eliminar_cliente(request, cliente_id):
+    """Elimina el cliente y en cascada borra sus campañas, proyectos y entregables vinculados."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    nombre = cliente.nombre_empresa
+    
+    # Se eliminan las campañas del cliente (Django elimina en cascada los proyectos y entregables asociados)
+    Campana.objects.filter(cliente=cliente).delete()
+    
+    # Se elimina el usuario asociado si existe
+    if cliente.usuario:
+        cliente.usuario.delete()
+        
+    cliente.delete()
+    messages.success(request, f'Cliente "{nombre}" y todo su historial de campañas, proyectos y tareas fueron eliminados.')
+    return redirect('crear_cliente')
+
+
+# ==========================================
+# 3. OTRAS VISTAS DE CREACIÓN
+# ==========================================
 @login_required
 @solo_administrador
 def crear_campana(request):
@@ -283,7 +325,6 @@ def crear_usuario(request):
                     }
                 )
 
-                # 📧 ENVÍO REAL DE CORREO AL CLIENTE
                 if usuario.email:
                     nombre_limpio = limpiar_texto_ascii(usuario.first_name or usuario.username)
                     asunto = "Accesos a tu panel de cliente - AgencyOS"
@@ -320,40 +361,28 @@ def crear_usuario(request):
 
 
 # ==========================================
-# 3. ENVÍO DE REPORTES PDF POR CORREO
+# 4. ENVÍO DE REPORTES PDF POR CORREO
 # ==========================================
 @login_required
 @solo_administrador
 def enviar_reporte_pdf_cliente(request, cliente_id):
-    """Genera un PDF dinámico con proyectos y entregables del cliente y lo envía por correo."""
     cliente = get_object_or_404(Cliente, id=cliente_id)
-    
     destino_email = cliente.email or (cliente.usuario.email if cliente.usuario and cliente.usuario.email else None)
 
     if not destino_email:
         messages.error(request, f"El cliente '{cliente.nombre_empresa}' no tiene un correo asignado.")
         return redirect('crear_cliente')
 
-    # Nombres limpios para evitar errores con UTF-8/SMTP
     empresa_limpia = limpiar_texto_ascii(cliente.nombre_empresa)
     contacto_limpio = limpiar_texto_ascii(cliente.contacto_nombre or cliente.nombre_empresa)
 
-    # ----------------------------------------------------
-    # OBTENCIÓN DE DATOS
-    # ----------------------------------------------------
     campanas_ids = Campana.objects.filter(cliente=cliente).values_list('id', flat=True)
-    
-    # Proyectos vinculados a las campañas del cliente
     proyectos = Proyecto.objects.filter(campana__in=campanas_ids).distinct()
 
-    # Entregables asociados a esos proyectos o cliente
     entregables = Entregable.objects.filter(
         Q(proyecto__in=proyectos) | Q(proyecto__campana__cliente=cliente)
     ).select_related('proyecto').distinct()
 
-    # ----------------------------------------------------
-    # CONSTRUCCIÓN DEL PDF CON REPORTLAB
-    # ----------------------------------------------------
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, 
@@ -366,19 +395,16 @@ def enviar_reporte_pdf_cliente(request, cliente_id):
     story = []
     styles = getSampleStyleSheet()
 
-    # Estilos
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0f172a'), spaceAfter=6)
     subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#475569'), spaceAfter=12)
     section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#1e293b'), spaceBefore=10, spaceAfter=8)
     cell_style = ParagraphStyle('CellStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#334155'))
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#0f172a'), fontName='Helvetica-Bold')
 
-    # Encabezado principal del PDF
     story.append(Paragraph("<b>REPORTE OFICIAL DE ESTADO DE PROYECTOS</b>", title_style))
     story.append(Paragraph(f"<b>Cliente:</b> {empresa_limpia} &nbsp;|&nbsp; <b>Contacto:</b> {contacto_limpio} &nbsp;|&nbsp; <b>Sistema:</b> AgencyOS", subtitle_style))
     story.append(Spacer(1, 5))
 
-    # SECCIÓN 1: PROYECTOS
     story.append(Paragraph("<b>1. Resumen de Proyectos</b>", section_style))
     data_proyectos = [["Nombre del Proyecto", "Campaña", "Estado / Descripción"]]
 
@@ -404,7 +430,6 @@ def enviar_reporte_pdf_cliente(request, cliente_id):
     story.append(t_proyectos)
     story.append(Spacer(1, 10))
 
-    # SECCIÓN 2: ENTREGABLES
     story.append(Paragraph("<b>2. Detalle de Entregables</b>", section_style))
     data_entregables = [["Proyecto", "Entregable / Tarea", "Estado", "Fecha Entrega"]]
 
@@ -431,14 +456,10 @@ def enviar_reporte_pdf_cliente(request, cliente_id):
     ]))
     story.append(t_entregables)
 
-    # Compilar el archivo PDF
     doc.build(story)
     pdf_data = buffer.getvalue()
     buffer.close()
 
-    # ----------------------------------------------------
-    # ENVÍO DEL CORREO
-    # ----------------------------------------------------
     slug_empresa = re.sub(r'[^a-zA-Z0-9_]', '_', empresa_limpia)
     nombre_archivo_adjunto = f"Reporte_{slug_empresa}.pdf"
 
@@ -467,7 +488,7 @@ def enviar_reporte_pdf_cliente(request, cliente_id):
 
 
 # ==========================================
-# 4. TABLERO KANBAN
+# 5. TABLERO KANBAN
 # ==========================================
 @login_required
 def kanban_view(request):
@@ -505,7 +526,7 @@ def kanban_view(request):
 
 
 # ==========================================
-# 5. ENTIDAD REVISIONES (REGISTRO DE AJUSTES)
+# 6. ENTIDAD REVISIONES (REGISTRO DE AJUSTES)
 # ==========================================
 @login_required
 def agregar_revision(request, entregable_id):
@@ -538,7 +559,7 @@ def agregar_revision(request, entregable_id):
 
 
 # ==========================================
-# 6. VISTA DE CRONOGRAMA
+# 7. VISTA DE CRONOGRAMA
 # ==========================================
 @login_required
 def cronograma_view(request):
@@ -567,7 +588,7 @@ def cronograma_view(request):
 
 
 # ==========================================
-# 7. APIS (JSON)
+# 8. APIS (JSON)
 # ==========================================
 @login_required
 def api_eventos_entregables(request):
@@ -619,7 +640,6 @@ def cambiar_estado_entregable(request, entregable_id):
             entregable.estado = nuevo_estado
             entregable.save()
 
-            # Notificar por correo si cambia a estado REVISION
             if nuevo_estado == 'REVISION':
                 cliente_user = getattr(getattr(getattr(entregable, 'proyecto', None), 'campana', None), 'cliente', None)
                 if cliente_user:
@@ -627,13 +647,16 @@ def cambiar_estado_entregable(request, entregable_id):
                 if cliente_user and cliente_user.email:
                     titulo_limpio = limpiar_texto_ascii(getattr(entregable, 'titulo', 'Entregable'))
                     nombre_user_limpio = limpiar_texto_ascii(cliente_user.first_name or cliente_user.username)
-                    send_mail(
-                        f"Avance listo para revision: {titulo_limpio}",
-                        f"Hola {nombre_user_limpio},\n\nEl entregable esta listo para tu aprobacion.",
-                        settings.DEFAULT_FROM_EMAIL,
-                        [cliente_user.email],
-                        fail_silently=True
-                    )
+                    try:
+                        send_mail(
+                            f"Avance listo para revision: {titulo_limpio}",
+                            f"Hola {nombre_user_limpio},\n\nEl entregable esta listo para tu aprobacion.",
+                            settings.DEFAULT_FROM_EMAIL,
+                            [cliente_user.email],
+                            fail_silently=True
+                        )
+                    except Exception:
+                        pass
 
             return JsonResponse({'status': 'success', 'nuevo_estado': entregable.estado})
         except Exception as e:
