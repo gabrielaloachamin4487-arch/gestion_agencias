@@ -1,0 +1,300 @@
+[
+{
+    "model": "auth.group",
+    "fields": {
+        "name": "Administrador",
+        "permissions": []
+    }
+},
+{
+    "model": "auth.group",
+    "fields": {
+        "name": "Cliente",
+        "permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$eTGdGpqvluktJISXxUEOPy$aW5HmM4+msyB/7GfZbfzNgs7OfKeIyjh691ZaVd6bpw=",
+        "last_login": null,
+        "is_superuser": true,
+        "username": "admin",
+        "first_name": "",
+        "last_name": "",
+        "email": "gabriela.loachamin4487@utc.edu.ec",
+        "is_staff": true,
+        "is_active": true,
+        "date_joined": "2026-07-28T22:34:30.609Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$uINmmTUBAwj05s5sbNyB6x$eypNODK3DP2lJJO+BVEF2wPzds8GVZqSR9cMDsMv9qI=",
+        "last_login": "2026-08-03T21:49:41.265Z",
+        "is_superuser": true,
+        "username": "gabriela",
+        "first_name": "",
+        "last_name": "",
+        "email": "gabriela.loachamin4487@utc.edu.ec",
+        "is_staff": true,
+        "is_active": true,
+        "date_joined": "2026-07-28T22:38:00.434Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$NvSNfIDpinEvE4HXwCM14H$5m41PwVb3jyZUx3P0KGku9GhxzNLANzbEMGoPmbgjDk=",
+        "last_login": "2026-08-03T21:49:16.788Z",
+        "is_superuser": false,
+        "username": "cristina",
+        "first_name": "cristina",
+        "last_name": "loachamin",
+        "email": "gabriela.loachamin4487@utc.edu.ec",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-08-02T19:45:18.936Z",
+        "groups": [
+            [
+                "Cliente"
+            ]
+        ],
+        "user_permissions": []
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "c2rht0ma63syitw85db19p85r69e462d",
+    "fields": {
+        "session_data": ".eJxVjMsOgjAQAP9lz6ZpV-iDo3e-oel2txY1kFA4Gf_dkHDQ68xk3hDTvtW4N1njxDAAwuWXUcpPmQ_BjzTfF5WXeVsnUkeiTtvUuLC8bmf7N6ipVRig6EzoNaNzXRGyzmZfnOUcAhrHhZA8CmkWCR2Va1-0Jt0b0zmxaA18vvitOAY:1woqRc:aMvDrM7NTsyr65lB2U9-Pqtumrw6JbZ6DooPZy1Kl98",
+        "expire_date": "2026-08-11T22:38:40.355Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "upacp7n36ygkbq0t88fsc1xhgfeiar9h",
+    "fields": {
+        "session_data": ".eJxVjMsOgjAQAP9lz6ZpV-iDo3e-oel2txY1kFA4Gf_dkHDQ68xk3hDTvtW4N1njxDAAwuWXUcpPmQ_BjzTfF5WXeVsnUkeiTtvUuLC8bmf7N6ipVRig6EzoNaNzXRGyzmZfnOUcAhrHhZA8CmkWCR2Va1-0Jt0b0zmxaA18vvitOAY:1wr0XV:KeeI8DWP8y6BxBS7LvduM1oiQv5UUti-K_MCSYxpbVY",
+        "expire_date": "2026-08-17T21:49:41.272Z"
+    }
+},
+{
+    "model": "agencia.cliente",
+    "pk": 1,
+    "fields": {
+        "usuario": null,
+        "nombre_empresa": "SOLUTECNOLOGIAS",
+        "contacto_nombre": "JUAN PEREZ",
+        "email": "gabriela.loachamin4487@utc.edu.ec",
+        "telefono": "0995675533",
+        "presupuesto_total": "0.00"
+    }
+},
+{
+    "model": "agencia.cliente",
+    "pk": 2,
+    "fields": {
+        "usuario": null,
+        "nombre_empresa": "pilas",
+        "contacto_nombre": "gabriela",
+        "email": "gaysgygs@gmail.com",
+        "telefono": "uduueuedh",
+        "presupuesto_total": "0.00"
+    }
+},
+{
+    "model": "agencia.cliente",
+    "pk": 3,
+    "fields": {
+        "usuario": null,
+        "nombre_empresa": "ANDINA",
+        "contacto_nombre": "karla Casa",
+        "email": "gabriela.loachamin4487@utc.edu.ec",
+        "telefono": "0995675533",
+        "presupuesto_total": "0.00"
+    }
+},
+{
+    "model": "agencia.cliente",
+    "pk": 4,
+    "fields": {
+        "usuario": [
+            "cristina"
+        ],
+        "nombre_empresa": "Empresa de cristina",
+        "contacto_nombre": "cristina loachamin",
+        "email": "gabriela.loachamin4487@utc.edu.ec",
+        "telefono": null,
+        "presupuesto_total": "1000.00"
+    }
+},
+{
+    "model": "agencia.campana",
+    "pk": 1,
+    "fields": {
+        "cliente": 1,
+        "nombre": "Campaña venta celulares",
+        "presupuesto": "0.05",
+        "fecha_inicio": "2026-07-28",
+        "fecha_fin": "2026-07-30"
+    }
+},
+{
+    "model": "agencia.campana",
+    "pk": 2,
+    "fields": {
+        "cliente": 2,
+        "nombre": "PILAS",
+        "presupuesto": "100.00",
+        "fecha_inicio": "2026-07-31",
+        "fecha_fin": "2026-08-01"
+    }
+},
+{
+    "model": "agencia.campana",
+    "pk": 3,
+    "fields": {
+        "cliente": 3,
+        "nombre": "andina produccion",
+        "presupuesto": "100.00",
+        "fecha_inicio": "2026-07-29",
+        "fecha_fin": "2026-08-06"
+    }
+},
+{
+    "model": "agencia.campana",
+    "pk": 4,
+    "fields": {
+        "cliente": 4,
+        "nombre": "logos tecnologicos",
+        "presupuesto": "100.00",
+        "fecha_inicio": "2026-08-03",
+        "fecha_fin": "2026-08-11"
+    }
+},
+{
+    "model": "agencia.proyecto",
+    "pk": 1,
+    "fields": {
+        "campana": 1,
+        "titulo": "publicidad celulares",
+        "descripcion": "costo celulares",
+        "estado": "EN_PROCESO",
+        "fecha_limite": "2026-07-29"
+    }
+},
+{
+    "model": "agencia.proyecto",
+    "pk": 2,
+    "fields": {
+        "campana": 2,
+        "titulo": "PILAS",
+        "descripcion": "SJXNHUSBXHSBX",
+        "estado": "EN_PROCESO",
+        "fecha_limite": "2026-07-29"
+    }
+},
+{
+    "model": "agencia.proyecto",
+    "pk": 3,
+    "fields": {
+        "campana": 3,
+        "titulo": "andina",
+        "descripcion": "publicidad organico",
+        "estado": "EN_PROCESO",
+        "fecha_limite": "2026-08-09"
+    }
+},
+{
+    "model": "agencia.proyecto",
+    "pk": 4,
+    "fields": {
+        "campana": 4,
+        "titulo": "tecnologia",
+        "descripcion": "publicidad de venta de tecnologia",
+        "estado": "EN_PROCESO",
+        "fecha_limite": "2026-08-06"
+    }
+},
+{
+    "model": "agencia.entregable",
+    "pk": 1,
+    "fields": {
+        "proyecto": 1,
+        "titulo": "publicidad celulares",
+        "asignado_a": null,
+        "rol_responsable": "DISEÑADOR",
+        "fecha_entrega": "2026-07-30",
+        "estado": "EN_PROCESO",
+        "horas_estimadas": "5.00",
+        "horas_reales": "5.00",
+        "horas_revision": "0.00"
+    }
+},
+{
+    "model": "agencia.entregable",
+    "pk": 2,
+    "fields": {
+        "proyecto": 2,
+        "titulo": "BANNER",
+        "asignado_a": null,
+        "rol_responsable": "DISEÑADOR",
+        "fecha_entrega": "2026-07-31",
+        "estado": "CORRECCION",
+        "horas_estimadas": "5.00",
+        "horas_reales": "5.00",
+        "horas_revision": "0.00"
+    }
+},
+{
+    "model": "agencia.entregable",
+    "pk": 3,
+    "fields": {
+        "proyecto": 1,
+        "titulo": "EDEW",
+        "asignado_a": null,
+        "rol_responsable": "DISEÑADOR",
+        "fecha_entrega": "2026-08-08",
+        "estado": "EN_REVISION",
+        "horas_estimadas": "5.00",
+        "horas_reales": "5.00",
+        "horas_revision": "0.00"
+    }
+},
+{
+    "model": "agencia.entregable",
+    "pk": 4,
+    "fields": {
+        "proyecto": 1,
+        "titulo": "SS",
+        "asignado_a": null,
+        "rol_responsable": "DISEÑADOR",
+        "fecha_entrega": "2026-08-07",
+        "estado": "PENDIENTE",
+        "horas_estimadas": "5.00",
+        "horas_reales": "5.00",
+        "horas_revision": "0.00"
+    }
+},
+{
+    "model": "agencia.entregable",
+    "pk": 5,
+    "fields": {
+        "proyecto": 2,
+        "titulo": "ASCXS",
+        "asignado_a": null,
+        "rol_responsable": "DISEÑADOR",
+        "fecha_entrega": "2026-08-09",
+        "estado": "APROBADO",
+        "horas_estimadas": "5.00",
+        "horas_reales": "5.00",
+        "horas_revision": "0.00"
+    }
+}
+]
