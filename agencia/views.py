@@ -49,7 +49,7 @@ def limpiar_texto_ascii(texto):
 def inicio(request):
     if request.user.is_authenticated:
         if request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser:
-            return redirect('kanban')
+            return redirect('dashboard')
         return redirect('dashboard')
     
     try:
@@ -64,7 +64,7 @@ def inicio(request):
 def login_view(request):
     if request.user.is_authenticated:
         if request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser:
-            return redirect('kanban')
+            return redirect('dashboard')
         return redirect('dashboard')
         
     if request.method == 'POST':
@@ -76,7 +76,7 @@ def login_view(request):
             auth_login(request, user)
             if user.groups.filter(name='Cliente').exists() and not user.is_superuser:
                 messages.success(request, f"¡Bienvenido de nuevo, {user.first_name or user.username}!")
-                return redirect('kanban')
+                return redirect('dashboard')
             else:
                 messages.success(request, f"Panel de Control - Bienvenido Administrador {user.username}")
                 return redirect('dashboard')
@@ -113,77 +113,119 @@ def solo_administrador(view_func):
 
 
 # ==========================================
-# 1. DASHBOARD COMPLETO CON ANALYTICS
+# 1. DASHBOARD COMPLETO CON ANALYTICS Y VISTA CLIENTE
 # ==========================================
 @login_required
 def dashboard(request):
-    if request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser:
-        return redirect('kanban')
+    user = request.user
+    es_cliente = user.groups.filter(name='Cliente').exists() and not user.is_superuser
 
-    proyectos_activos = Proyecto.objects.filter(estado__in=['NUEVO', 'EN_PROCESO', 'REVISION']).count() if hasattr(Proyecto, 'estado') else Proyecto.objects.count()
-    total_clientes = Cliente.objects.count()
-    tareas_pendientes = Entregable.objects.filter(estado__in=['PENDIENTE', 'EN_PROCESO', 'CORRECCION']).count()
-    
-    carga_disenadores = Entregable.objects.filter(
-        rol_responsable='DISEÑADOR'
-    ).exclude(
-        estado='APROBADO'
-    ).values(
-        'asignado_a__username', 'asignado_a__first_name', 'asignado_a__last_name'
-    ).annotate(
-        total_tareas=Count('id'),
-        horas_totales=Sum('horas_estimadas')
-    )
+    if es_cliente:
+        # Obtener el cliente vinculado al usuario actual
+        cliente = Cliente.objects.filter(usuario=user).first()
+        if not cliente and hasattr(user, 'perfil_cliente'):
+            cliente = user.perfil_cliente
 
-    carga_copywriters = Entregable.objects.filter(
-        rol_responsable='COPYWRITER'
-    ).exclude(
-        estado='APROBADO'
-    ).values(
-        'asignado_a__username', 'asignado_a__first_name', 'asignado_a__last_name'
-    ).annotate(
-        total_tareas=Count('id'),
-        horas_totales=Sum('horas_estimadas')
-    )
+        if cliente:
+            campanas = Campana.objects.filter(cliente=cliente)
+            proyectos = Proyecto.objects.filter(campana__cliente=cliente)
+            entregables = Entregable.objects.filter(proyecto__campana__cliente=cliente)
 
-    COSTO_POR_HORA = Decimal('25.0')
-    reporte_rentabilidad = []
-    
-    for cli in Cliente.objects.all():
-        entregables_cliente = Entregable.objects.filter(
-            proyecto__campana__cliente=cli
+            presupuesto_total = getattr(cliente, 'presupuesto_total', Decimal('0.00')) or Decimal('0.00')
+            presupuesto_usado = campanas.aggregate(total=Sum('presupuesto'))['total'] or Decimal('0.00')
+
+            context = {
+                'es_cliente': True,
+                'cliente': cliente,
+                'campanas': campanas,
+                'proyectos': proyectos.order_by('-id')[:5],
+                'total_campanas': campanas.count(),
+                'total_proyectos': proyectos.count(),
+                'entregables_aprobados': entregables.filter(estado='APROBADO').count(),
+                'entregables_pendientes': entregables.exclude(estado='APROBADO').count(),
+                'presupuesto_total': presupuesto_total,
+                'presupuesto_usado': presupuesto_usado,
+            }
+        else:
+            context = {
+                'es_cliente': True,
+                'cliente': None,
+                'campanas': [],
+                'proyectos': [],
+                'total_campanas': 0,
+                'total_proyectos': 0,
+                'entregables_aprobados': 0,
+                'entregables_pendientes': 0,
+                'presupuesto_total': Decimal('0.00'),
+                'presupuesto_usado': Decimal('0.00'),
+            }
+    else:
+        # Vista Administrador / Staff
+        proyectos_activos = Proyecto.objects.filter(estado__in=['NUEVO', 'EN_PROCESO', 'REVISION']).count() if hasattr(Proyecto, 'estado') else Proyecto.objects.count()
+        total_clientes = Cliente.objects.count()
+        tareas_pendientes = Entregable.objects.filter(estado__in=['PENDIENTE', 'EN_PROCESO', 'CORRECCION']).count()
+        
+        carga_disenadores = Entregable.objects.filter(
+            rol_responsable='DISEÑADOR'
+        ).exclude(
+            estado='APROBADO'
+        ).values(
+            'asignado_a__username', 'asignado_a__first_name', 'asignado_a__last_name'
+        ).annotate(
+            total_tareas=Count('id'),
+            horas_totales=Sum('horas_estimadas')
         )
+
+        carga_copywriters = Entregable.objects.filter(
+            rol_responsable='COPYWRITER'
+        ).exclude(
+            estado='APROBADO'
+        ).values(
+            'asignado_a__username', 'asignado_a__first_name', 'asignado_a__last_name'
+        ).annotate(
+            total_tareas=Count('id'),
+            horas_totales=Sum('horas_estimadas')
+        )
+
+        COSTO_POR_HORA = Decimal('25.0')
+        reporte_rentabilidad = []
         
-        total_horas_invertidas = entregables_cliente.aggregate(Sum('horas_reales'))['horas_reales__sum'] or Decimal('0.0')
-        total_horas_revision = entregables_cliente.aggregate(Sum('horas_revision'))['horas_revision__sum'] or Decimal('0.0')
-        
-        presupuesto = Decimal(str(cli.presupuesto_total)) if hasattr(cli, 'presupuesto_total') and cli.presupuesto_total else Decimal('0.0')
-        costo_total = (total_horas_invertidas + total_horas_revision) * COSTO_POR_HORA
-        rentabilidad = presupuesto - costo_total
+        for cli in Cliente.objects.all():
+            entregables_cliente = Entregable.objects.filter(
+                proyecto__campana__cliente=cli
+            )
+            
+            total_horas_invertidas = entregables_cliente.aggregate(Sum('horas_reales'))['horas_reales__sum'] or Decimal('0.0')
+            total_horas_revision = entregables_cliente.aggregate(Sum('horas_revision'))['horas_revision__sum'] or Decimal('0.0')
+            
+            presupuesto = Decimal(str(cli.presupuesto_total)) if hasattr(cli, 'presupuesto_total') and cli.presupuesto_total else Decimal('0.0')
+            costo_total = (total_horas_invertidas + total_horas_revision) * COSTO_POR_HORA
+            rentabilidad = presupuesto - costo_total
 
-        reporte_rentabilidad.append({
-            'cliente': getattr(cli, 'nombre_empresa', str(cli)),
-            'presupuesto': presupuesto,
-            'horas_invertidas': total_horas_invertidas,
-            'horas_revision': total_horas_revision,
-            'costo_total': costo_total,
-            'rentabilidad': rentabilidad,
-            'es_rentable': rentabilidad >= Decimal('0.0')
-        })
+            reporte_rentabilidad.append({
+                'cliente': getattr(cli, 'nombre_empresa', str(cli)),
+                'presupuesto': presupuesto,
+                'horas_invertidas': total_horas_invertidas,
+                'horas_revision': total_horas_revision,
+                'costo_total': costo_total,
+                'rentabilidad': rentabilidad,
+                'es_rentable': rentabilidad >= Decimal('0.0')
+            })
 
-    entregables_con_exceso_revision = Entregable.objects.filter(
-        Q(horas_revision__gt=0) | Q(horas_reales__gt=Decimal('0.0'))
-    ).select_related('proyecto', 'asignado_a')
+        entregables_con_exceso_revision = Entregable.objects.filter(
+            Q(horas_revision__gt=0) | Q(horas_reales__gt=Decimal('0.0'))
+        ).select_related('proyecto', 'asignado_a')
 
-    context = {
-        'proyectos_activos': proyectos_activos,
-        'total_clientes': total_clientes,
-        'tareas_pendientes': tareas_pendientes,
-        'carga_disenadores': carga_disenadores,
-        'carga_copywriters': carga_copywriters,
-        'reporte_rentabilidad': reporte_rentabilidad,
-        'entregables_revision': entregables_con_exceso_revision,
-    }
+        context = {
+            'es_cliente': False,
+            'proyectos_activos': proyectos_activos,
+            'total_clientes': total_clientes,
+            'tareas_pendientes': tareas_pendientes,
+            'carga_disenadores': carga_disenadores,
+            'carga_copywriters': carga_copywriters,
+            'reporte_rentabilidad': reporte_rentabilidad,
+            'entregables_revision': entregables_con_exceso_revision,
+        }
     
     try:
         return render(request, 'core/dashboard.html', context)
@@ -240,10 +282,8 @@ def eliminar_cliente(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
     nombre = cliente.nombre_empresa
     
-    # Se eliminan las campañas del cliente (Django elimina en cascada los proyectos y entregables asociados)
     Campana.objects.filter(cliente=cliente).delete()
     
-    # Se elimina el usuario asociado si existe
     if cliente.usuario:
         cliente.usuario.delete()
         
@@ -333,7 +373,7 @@ def crear_usuario(request):
                         f"Tu cuenta de Cliente ha sido creada correctamente.\n\n"
                         f"Detalles de acceso:\n"
                         f"- Usuario: {usuario.username}\n"
-                        f"- Panel de Control: http://127.0.0.1:8000/login/\n\n"
+                        f"- Panel de Control: https://gestion-agencias.onrender.com/login/\n\n"
                         f"Desde el panel podras ver tus tableros, cronogramas y aprobar avances.\n\n"
                         f"Atentamente,\nEl Equipo de la Agencia."
                     )
@@ -480,7 +520,7 @@ def enviar_reporte_pdf_cliente(request, cliente_id):
         email.attach(nombre_archivo_adjunto, pdf_data, 'application/pdf')
         email.send(fail_silently=False)
 
-        messages.success(request, f"🚀 ¡Reporte PDF enviado con éxito a {destino_email}!")
+        messages.success(request, f"¡Reporte PDF enviado con éxito a {destino_email}!")
     except Exception as e:
         messages.error(request, f"Ocurrió un error al enviar el correo: {e}")
 
@@ -492,7 +532,7 @@ def enviar_reporte_pdf_cliente(request, cliente_id):
 # ==========================================
 @login_required
 def kanban_view(request):
-    es_cliente = request.user.groups.filter(name='Cliente').exists()
+    es_cliente = request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser
 
     if request.method == 'POST':
         form = EntregableForm(request.POST)
@@ -563,7 +603,7 @@ def agregar_revision(request, entregable_id):
 # ==========================================
 @login_required
 def cronograma_view(request):
-    es_cliente = request.user.groups.filter(name='Cliente').exists()
+    es_cliente = request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser
 
     if es_cliente:
         entregables = Entregable.objects.filter(
@@ -592,7 +632,7 @@ def cronograma_view(request):
 # ==========================================
 @login_required
 def api_eventos_entregables(request):
-    es_cliente = request.user.groups.filter(name='Cliente').exists()
+    es_cliente = request.user.groups.filter(name='Cliente').exists() and not request.user.is_superuser
 
     if es_cliente:
         entregables = Entregable.objects.filter(
