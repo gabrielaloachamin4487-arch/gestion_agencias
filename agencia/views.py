@@ -79,7 +79,7 @@ def verificar_alertas_retraso():
             
             emails_directores = [d.email for d in directores if d.email]
             if emails_directores:
-                lista_titulos = "\n".join([f"- {e.titulo} (Proyecto: {e.proyecto.titulo}, Límite: {e.fecha_limite})" for e in entregables_retrasados[:10]])
+                lista_titulos = "\n".join([f"- {e.titulo} (Proyecto: {e.proyecto.titulo if e.proyecto else 'N/A'}, Límite: {e.fecha_limite})" for e in entregables_retrasados[:10]])
                 asunto = "ALERTA: Entregables con Infracción de Tiempo / Retraso"
                 mensaje = (
                     f"Estimado Director de Arte / PM,\n\n"
@@ -142,7 +142,7 @@ def logout_view(request):
 
 
 # ==========================================
-# 1. DASHBOARD COMPLETO CON CARGA LABORAL Y RENTABILIDAD
+# 1. DASHBOARD COMPLETO (CORREGIDO DE RAÍZ)
 # ==========================================
 @login_required
 def dashboard(request):
@@ -174,7 +174,7 @@ def dashboard(request):
                 Q(proyecto__campana__cliente=cliente) | Q(proyecto__cliente=cliente)
             ).distinct()
 
-            presupuesto_total = cliente.presupuesto_total or Decimal('0.00')
+            presupuesto_total = getattr(cliente, 'presupuesto_total', None) or Decimal('0.00')
             presupuesto_usado = campanas.aggregate(total=Sum('presupuesto'))['total'] or Decimal('0.00')
 
             context = {
@@ -220,8 +220,8 @@ def dashboard(request):
             carga_creativos.append({
                 'id': cr.id,
                 'nombre': cr.usuario.get_full_name() or cr.usuario.username,
-                'rol': cr.get_rol_display(),
-                'tarifa': cr.tarifa_hora,
+                'rol': cr.get_rol_display() if hasattr(cr, 'get_rol_display') else 'Creativo',
+                'tarifa': getattr(cr, 'tarifa_hora', Decimal('0.00')),
                 'horas_asignadas': float(horas_asig),
                 'horas_disponibles': max(40.0 - float(horas_asig), 0.0),
                 'porcentaje': porcentaje,
@@ -230,6 +230,7 @@ def dashboard(request):
 
         reporte_rentabilidad = []
         for cli in Cliente.objects.all():
+            # CORRECCIÓN CLAVE: Buscar entregables relacionados con el cliente seguro
             entregables_cliente = Entregable.objects.filter(
                 Q(proyecto__campana__cliente=cli) | Q(proyecto__cliente=cli)
             ).distinct()
@@ -240,7 +241,7 @@ def dashboard(request):
             for ent in entregables_cliente:
                 total_horas_rebasadas += Decimal(str(getattr(ent, 'horas_rebasadas', 0)))
 
-            presupuesto_total = cli.presupuesto_total or Decimal('0.0')
+            presupuesto_total = getattr(cli, 'presupuesto_total', None) or Decimal('0.0')
             COSTO_HORA_PROMEDIO = Decimal('25.0')
             costo_horas_extra = total_horas_rebasadas * COSTO_HORA_PROMEDIO
             costo_total_operativo = (total_horas_reales + total_horas_rebasadas) * COSTO_HORA_PROMEDIO
@@ -446,7 +447,7 @@ def crear_usuario(request):
 
 
 # ==========================================
-# 5. TABLERO KANBAN CON DRAG & DROP Y HOTKEYS
+# 5. TABLERO KANBAN
 # ==========================================
 @login_required
 def kanban_view(request):
@@ -518,8 +519,8 @@ def agregar_revision(request, entregable_id):
             revision.realizado_por = request.user
             revision.save()
 
-            horas_adicionales = revision.horas_adicionales or Decimal('0.0')
-            entregable.horas_revision = (entregable.horas_revision or Decimal('0.0')) + horas_adicionales
+            horas_adicionales = getattr(revision, 'horas_adicionales', Decimal('0.0')) or Decimal('0.0')
+            entregable.horas_revision = (getattr(entregable, 'horas_revision', Decimal('0.0')) or Decimal('0.0')) + horas_adicionales
             
             if revision.aprobado:
                 entregable.estado = 'APROBADO'
@@ -540,7 +541,7 @@ def agregar_revision(request, entregable_id):
 
 
 # ==========================================
-# 7. CRONOGRAMA INTERACTIVO (FULLCALENDAR)
+# 7. CRONOGRAMA INTERACTIVO
 # ==========================================
 @login_required
 def cronograma_view(request):
@@ -602,7 +603,7 @@ def api_eventos_entregables(request):
     }
 
     for e in entregables:
-        fecha_target = e.fecha_limite or e.fecha_entrega
+        fecha_target = getattr(e, 'fecha_limite', None) or getattr(e, 'fecha_entrega', None)
         if fecha_target:
             nombre_proyecto = e.proyecto.titulo if e.proyecto else 'Sin proyecto'
             titulo_entregable = e.titulo
@@ -678,7 +679,7 @@ def cambiar_estado_entregable(request, entregable_id):
 
 
 # ==========================================
-# 9. EXPORTACIÓN Y GENERACIÓN DE PDF COMPROBANTE
+# 9. EXPORTACIÓN Y GENERACIÓN DE PDF
 # ==========================================
 @login_required
 @solo_administrador
@@ -713,7 +714,7 @@ def exportar_rentabilidad_csv(request):
         for ent in entregables:
             total_horas_rebasadas += Decimal(str(getattr(ent, 'horas_rebasadas', 0)))
 
-        presupuesto = cli.presupuesto_total or Decimal('0.0')
+        presupuesto = getattr(cli, 'presupuesto_total', None) or Decimal('0.0')
         costo_extra = total_horas_rebasadas * COSTO_HORA
         costo_total = (total_horas_reales + total_horas_rebasadas) * COSTO_HORA
         rentabilidad = presupuesto - costo_total
@@ -788,7 +789,7 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     story.append(t_info)
     story.append(Spacer(1, 10))
 
-    # 2. Historial de Revisiones y Aprobaciones
+    # 2. Historial de Revisiones
     story.append(Paragraph("<b>2. Historial de Revisiones y Control de Calidad</b>", section_style))
     revs = entregable.revisiones.all().order_by('fecha_revision')
     data_revs = [["N°", "Fecha y Hora", "Revisor", "Observaciones", "Resultado", "Horas Adic."]]
@@ -802,9 +803,9 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
                 str(idx),
                 f_str,
                 limpiar_texto_ascii(revisor_str),
-                Paragraph(limpiar_texto_ascii(r.comentarios or r.observaciones if hasattr(r, 'observaciones') else 'Sin observaciones'), cell_style),
+                Paragraph(limpiar_texto_ascii(getattr(r, 'comentarios', None) or getattr(r, 'observaciones', None) or 'Sin observaciones'), cell_style),
                 "APROBADO" if r.aprobado else "RECHAZADO / AJUSTES",
-                f"{r.horas_adicionales}h" if hasattr(r, 'horas_adicionales') else "0h"
+                f"{getattr(r, 'horas_adicionales', 0)}h"
             ])
     else:
         data_revs.append(["-", "-", "Sin revisiones registradas", "-", "-", "-"])
