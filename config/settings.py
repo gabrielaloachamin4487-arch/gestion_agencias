@@ -146,23 +146,12 @@ LOGIN_URL = 'login'
 
 
 # ==========================================
-# CONFIGURACIÓN DE ENVÍO DE CORREOS REALES
-# ==========================================
+
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-
-# Tu correo emisor institucional/personal
-EMAIL_HOST_USER = 'gabriela.loachamin4487@utc.edu.ec'
-
-# Poner aquí tu contraseña de aplicación de 16 caracteres de Google
-EMAIL_HOST_PASSWORD = 'gzxgfmecrweowvjg'
-
-# Remitente predeterminado limpio
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ['true', '1', 't']
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'gabriela.loachamin4487@utc.edu.ec')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'xkvqjxcrymhcafog')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-DEFAULT_CHARSET = 'utf-8'
-
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
