@@ -341,18 +341,30 @@ def enviar_reporte_pdf_cliente(request, cliente_id):
         return redirect('crear_cliente')
 
     try:
+        # Generar el reporte PDF en memoria
+        pdf_response = generar_reporte_pdf_cliente(request, cliente_id)
+        pdf_bytes = pdf_response.content
+
         asunto = f"Reporte de Proyectos y Estado - {cliente.nombre_empresa}"
         mensaje = (
             f"Estimado/a {cliente.contacto_nombre or cliente.nombre_empresa},\n\n"
-            f"Se ha generado la actualización del estado de sus campañas y proyectos en la plataforma AgencyOS.\n\n"
-            f"Por favor, ingrese a su panel de control para revisar el detalle de sus entregables y revisiones.\n\n"
+            f"Adjunto encontrará el informe detallado del estado de sus campañas y proyectos en la plataforma AgencyOS.\n\n"
+            f"Por favor, ingrese a su portal para revisar el detalle de sus entregables y revisiones.\n\n"
             f"Atentamente,\nEl Equipo de AgencyOS"
         )
         
-        send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, [email_destino], fail_silently=True)
-        messages.success(request, f'Reporte enviado exitosamente a {email_destino}.')
+        email = EmailMessage(
+            subject=asunto,
+            body=mensaje,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[email_destino]
+        )
+        email.attach(f"Reporte_{cliente.id}_AgencyOS.pdf", pdf_bytes, 'application/pdf')
+        
+        email.send(fail_silently=True)
+        messages.success(request, f'Reporte PDF enviado exitosamente a {email_destino}.')
     except Exception as e:
-        messages.error(request, f'Ocurrió un error al intentar enviar el correo: {e}')
+        messages.warning(request, f'El proceso finalizó con aviso: {e}')
 
     return redirect('crear_cliente')
 
@@ -763,7 +775,7 @@ def exportar_rentabilidad_csv(request):
 
 @login_required
 def generar_reporte_pdf_cliente(request, cliente_id):
-    """Genera y descarga un reporte institucional en PDF para un cliente específico."""
+    """Genera y devuelve un reporte institucional en PDF para un cliente específico."""
     cliente = get_object_or_404(Cliente, id=cliente_id)
     
     buffer = io.BytesIO()
@@ -788,150 +800,65 @@ def generar_reporte_pdf_cliente(request, cliente_id):
     story.append(Paragraph(f"<b>AgencyOS Platform</b> | Generado el: {date.today().strftime('%d/%m/%Y')}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceAfter=12))
 
-    info_data = [
-        [Paragraph("<b>Empresa:</b>", cell_bold), Paragraph(str(cliente.nombre_empresa), cell_style), Paragraph("<b>Contacto:</b>", cell_bold), Paragraph(str(cliente.contacto_nombre or 'N/A'), cell_style)],
-        [Paragraph("<b>RUC / Tax ID:</b>", cell_bold), Paragraph(str(getattr(cliente, 'ruc', 'N/A') or 'N/A'), cell_style), Paragraph("<b>Email:</b>", cell_bold), Paragraph(str(cliente.email or 'N/A'), cell_style)],
-        [Paragraph("<b>Presupuesto Total:</b>", cell_bold), Paragraph(f"${getattr(cliente, 'presupuesto_total', Decimal('0.00')):.2f}", cell_style), Paragraph("<b>Estado:</b>", cell_bold), Paragraph("ACTIVO", cell_style)],
+    # Información general del cliente
+    datos_cliente = [
+        [Paragraph("<b>Empresa:</b>", cell_bold), Paragraph(cliente.nombre_empresa, cell_style), Paragraph("<b>Contacto:</b>", cell_bold), Paragraph(cliente.contacto_nombre or "N/A", cell_style)],
+        [Paragraph("<b>RUC / Tax ID:</b>", cell_bold), Paragraph(getattr(cliente, 'ruc', 'N/A') or 'N/A', cell_style), Paragraph("<b>Email:</b>", cell_bold), Paragraph(cliente.email or "N/A", cell_style)],
+        [Paragraph("<b>Presupuesto Total:</b>", cell_bold), Paragraph(f"${getattr(cliente, 'presupuesto_total', Decimal('0.00')):.2f}", cell_style), Paragraph("<b>Teléfono:</b>", cell_bold), Paragraph(cliente.telefono or "N/A", cell_style)],
     ]
-    t_info = Table(info_data, colWidths=[100, 170, 80, 190])
-    t_info.setStyle(TableStyle([
+    t_cliente = Table(datos_cliente, colWidths=[100, 170, 80, 190])
+    t_cliente.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
         ('PADDING', (0,0), (-1,-1), 6),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#f1f5f9')),
     ]))
-    story.append(t_info)
+    story.append(t_cliente)
+    story.append(Spacer(1, 14))
 
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("<b>Campañas y Proyectos Activos</b>", section_style))
-
-    campanas = Campana.objects.filter(cliente=cliente)
+    # Proyectos y Entregables del Cliente
+    story.append(Paragraph("<b>Resumen de Proyectos y Piezas Registradas</b>", section_style))
+    
     proyectos = Proyecto.objects.filter(
         Q(campana__cliente=cliente) | (Q(cliente=cliente) if hasattr(Proyecto, 'cliente') else Q())
     ).distinct()
 
-    tabla_proyectos = [[
-        Paragraph("<b>Proyecto</b>", cell_bold),
-        Paragraph("<b>Campaña</b>", cell_bold),
-        Paragraph("<b>Tipo</b>", cell_bold),
-        Paragraph("<b>Prioridad</b>", cell_bold)
+    tabla_datos = [[
+        Paragraph("<b>Proyecto / Pieza</b>", cell_bold),
+        Paragraph("<b>Estado</b>", cell_bold),
+        Paragraph("<b>Hrs. Est.</b>", cell_bold),
+        Paragraph("<b>Hrs. Reales</b>", cell_bold),
+        Paragraph("<b>Fecha Límite</b>", cell_bold)
     ]]
 
-    for p in proyectos:
-        tabla_proyectos.append([
-            Paragraph(str(p.titulo), cell_style),
-            Paragraph(str(p.campana.nombre) if p.campana else "N/A", cell_style),
-            Paragraph(str(p.get_tipo_display() if hasattr(p, 'get_tipo_display') else 'General'), cell_style),
-            Paragraph(str(p.get_prioridad_display() if hasattr(p, 'get_prioridad_display') else 'Media'), cell_style)
-        ])
+    entregables_total = Entregable.objects.filter(
+        Q(proyecto__campana__cliente=cliente) | (Q(proyecto__cliente=cliente) if hasattr(Proyecto, 'cliente') else Q())
+    ).distinct()
 
-    if len(tabla_proyectos) == 1:
-        tabla_proyectos.append([Paragraph("No hay proyectos registrados aún.", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style)])
+    if entregables_total.exists():
+        for ent in entregables_total:
+            fecha_str = ent.fecha_limite.strftime('%d/%m/%Y') if getattr(ent, 'fecha_limite', None) else 'N/A'
+            tabla_datos.append([
+                Paragraph(ent.titulo, cell_style),
+                Paragraph(ent.get_estado_display(), cell_style),
+                Paragraph(f"{ent.horas_estimadas:.1f}", cell_style),
+                Paragraph(f"{ent.horas_reales:.1f}", cell_style),
+                Paragraph(fecha_str, cell_style)
+            ])
+    else:
+        tabla_datos.append([Paragraph("No hay entregables o piezas registradas.", cell_style), "", "", "", ""])
 
-    t_proj = Table(tabla_proyectos, colWidths=[180, 160, 100, 100])
-    t_proj.setStyle(TableStyle([
+    t_proyectos = Table(tabla_datos, colWidths=[180, 110, 70, 70, 110])
+    t_proyectos.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
         ('PADDING', (0,0), (-1,-1), 5),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
     ]))
-    story.append(t_proj)
+    story.append(t_proyectos)
 
     doc.build(story)
     buffer.seek(0)
-    
-    response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="Reporte_{cliente.id}_AgencyOS.pdf"'
-    return response
 
-
-@login_required
-def generar_comprobante_pdf_entregable(request, entregable_id):
-    entregable = get_object_or_404(Entregable, id=entregable_id)
-    
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=letter, 
-        rightMargin=36, 
-        leftMargin=36, 
-        topMargin=36, 
-        bottomMargin=36
-    )
-    story = []
-    styles = getSampleStyleSheet()
-
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0f172a'), spaceAfter=4)
-    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#475569'), spaceAfter=12)
-    section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#1e293b'), spaceBefore=10, spaceAfter=8)
-    cell_style = ParagraphStyle('CellStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#334155'))
-    cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#0f172a'), fontName='Helvetica-Bold')
-
-    hash_seed = f"{entregable.id}-{entregable.titulo}-{date.today().isoformat()}-AgencyOS"
-    codigo_verificacion = hashlib.sha256(hash_seed.encode('utf-8')).hexdigest()[:16].upper()
-
-    story.append(Paragraph("<b>COMPROBANTE OFICIAL DE ENTREGA Y LIQUIDACIÓN DE ARTE</b>", title_style))
-    story.append(Paragraph(f"<b>Código de Verificación:</b> {codigo_verificacion} | <b>Fecha:</b> {date.today().strftime('%d/%m/%Y')}", subtitle_style))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceAfter=12))
-
-    cliente_nombre = "N/A"
-    campana_nombre = "N/A"
-    if entregable.proyecto and entregable.proyecto.campana and entregable.proyecto.campana.cliente:
-        cliente_nombre = entregable.proyecto.campana.cliente.nombre_empresa
-        campana_nombre = entregable.proyecto.campana.nombre
-
-    detalles_data = [
-        [Paragraph("<b>Entregable / Pieza:</b>", cell_bold), Paragraph(str(entregable.titulo), cell_style), Paragraph("<b>Estado Actual:</b>", cell_bold), Paragraph(str(entregable.get_estado_display()), cell_style)],
-        [Paragraph("<b>Proyecto:</b>", cell_bold), Paragraph(str(entregable.proyecto.titulo if entregable.proyecto else 'N/A'), cell_style), Paragraph("<b>Campaña:</b>", cell_bold), Paragraph(str(campana_nombre), cell_style)],
-        [Paragraph("<b>Cliente:</b>", cell_bold), Paragraph(str(cliente_nombre), cell_style), Paragraph("<b>Creativo Responsable:</b>", cell_bold), Paragraph(str(entregable.creativo.usuario.get_full_name() if entregable.creativo else 'Sin Asignar'), cell_style)],
-        [Paragraph("<b>Horas Estimadas:</b>", cell_bold), Paragraph(f"{float(entregable.horas_estimadas):.1f} hs", cell_style), Paragraph("<b>Horas Reales:</b>", cell_bold), Paragraph(f"{float(entregable.horas_reales):.1f} hs", cell_style)],
-    ]
-
-    t_detalles = Table(detalles_data, colWidths=[110, 160, 110, 160])
-    t_detalles.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
-        ('PADDING', (0,0), (-1,-1), 6),
-    ]))
-    story.append(t_detalles)
-
-    story.append(Spacer(1, 10))
-    story.append(Paragraph("<b>Historial de Revisiones y Aprobaciones</b>", section_style))
-
-    revisiones = entregable.revisiones.all().order_by('fecha_creacion') if hasattr(entregable, 'revisiones') else []
-    tabla_revs = [[
-        Paragraph("<b>#</b>", cell_bold),
-        Paragraph("<b>Fecha</b>", cell_bold),
-        Paragraph("<b>Revisor / Usuario</b>", cell_bold),
-        Paragraph("<b>Resultado</b>", cell_bold),
-        Paragraph("<b>Observaciones</b>", cell_bold)
-    ]]
-
-    for i, rev in enumerate(revisiones, start=1):
-        revisor_nombre = getattr(rev, 'revisor', None) or getattr(rev, 'realizado_por', None)
-        revisor_str = revisor_nombre.get_full_name() if revisor_nombre else "Cliente / Sistema"
-        resultado = "APROBADO" if getattr(rev, 'aprobado', False) else "CON OBSERVACIONES"
-        
-        tabla_revs.append([
-            Paragraph(str(i), cell_style),
-            Paragraph(rev.fecha_creacion.strftime('%d/%m/%Y') if hasattr(rev, 'fecha_creacion') else date.today().strftime('%d/%m/%Y'), cell_style),
-            Paragraph(revisor_str, cell_style),
-            Paragraph(resultado, cell_style),
-            Paragraph(str(getattr(rev, 'comentarios', 'Sin comentarios') or getattr(rev, 'observaciones', 'Sin comentarios')), cell_style)
-        ])
-
-    if len(tabla_revs) == 1:
-        tabla_revs.append([Paragraph("1", cell_style), Paragraph(date.today().strftime('%d/%m/%Y'), cell_style), Paragraph("Sistema AgencyOS", cell_style), Paragraph("REGISTRADO", cell_style), Paragraph("Sin revisiones previas registradas.", cell_style)])
-
-    t_revs = Table(tabla_revs, colWidths=[20, 60, 110, 100, 250])
-    t_revs.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
-        ('PADDING', (0,0), (-1,-1), 5),
-    ]))
-    story.append(t_revs)
-
-    doc.build(story)
-    buffer.seek(0)
-    
-    response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="Comprobante_Entregable_{entregable.id}.pdf"'
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Reporte_{cliente.nombre_empresa}_{date.today().strftime("%Y%m%d")}.pdf"'
     return response
