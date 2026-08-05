@@ -1,39 +1,99 @@
 {% extends 'base.html' %}
 
-{% block title %}Cronograma de Entregas - AgenciaOS{% endblock %}
-{% block header %}Cronograma de Entregas de Piezas Publicitarias{% endblock %}
+{% block title %}Cronograma de Entregas - AgencyOS{% endblock %}
+{% block header %}Cronograma Interactivo de Entregas (FullCalendar){% endblock %}
 
 {% block content %}
-<!-- FullCalendar CDN -->
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<div class="container-fluid px-0">
 
-<div class="card border-0 shadow-sm p-4 bg-white rounded-3">
-    <div id="calendar"></div>
+    <!-- FILTROS INTERACTIVOS PARA EL CALENDARIO -->
+    <div class="card card-custom p-3 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-4">
+                <label class="form-label small text-secondary fw-bold mb-1"><i class="fa-solid fa-filter me-1"></i> Filtrar por Cliente</label>
+                <select id="filtro-cliente" class="form-select form-select-sm">
+                    <option value="">-- Todos los Clientes --</option>
+                    {% for c in clientes %}
+                        <option value="{{ c.id }}">{{ c.nombre_empresa }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small text-secondary fw-bold mb-1"><i class="fa-solid fa-bullhorn me-1"></i> Filtrar por Campaña</label>
+                <select id="filtro-campana" class="form-select form-select-sm">
+                    <option value="">-- Todas las Campañas --</option>
+                    {% for cmp in campanas %}
+                        <option value="{{ cmp.id }}">{{ cmp.nombre }} ({{ cmp.cliente.nombre_empresa }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 text-end">
+                <button type="button" id="btnRecargarCalendario" class="btn btn-sm btn-primary rounded-pill px-3 mt-4">
+                    <i class="fa-solid fa-arrows-rotate me-1"></i> Aplicar Filtros
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTENEDOR DEL CALENDARIO -->
+    <div class="card card-custom p-4 mb-4">
+        <div id="full-calendar-container" style="min-height: 550px;"></div>
+    </div>
+
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var calendarEl = document.getElementById('calendar');
-        var calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'dayGridMonth',
-            locale: 'es',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,listWeek'
-            },
-            events: [
-                {% for item in entregables %}
-                {
-                    title: '{{ item.titulo|escapejs }} ({{ item.rol_responsable|default:"Gral" }})',
-                    start: '{{ item.fecha_entrega|date:"Y-m-d" }}',
-                    color: '{% if item.estado == "APROBADO" %}#198754{% elif item.estado == "CORRECCION" %}#dc3545{% elif item.estado == "EN_PROCESO" %}#0dcaf0{% else %}#ffc107{% endif %}',
-                    textColor: '{% if item.estado == "PENDIENTE" %}#000{% else %}#fff{% endif %}'
-                }{% if not forloop.last %},{% endif %}
-                {% endfor %}
-            ]
-        });
-        calendar.render();
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('full-calendar-container');
+    
+    function fetchEventsUrl() {
+        var cliId = $('#filtro-cliente').val();
+        var cmpId = $('#filtro-campana').val();
+        var url = "{% url 'api_eventos_entregables' %}?";
+        if (cliId) url += "cliente_id=" + cliId + "&";
+        if (cmpId) url += "campana_id=" + cmpId;
+        return url;
+    }
+
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'es',
+        themeSystem: 'bootstrap5',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,listWeek'
+        },
+        events: function(info, successCallback, failureCallback) {
+            $.ajax({
+                url: fetchEventsUrl(),
+                type: 'GET',
+                success: function(data) {
+                    successCallback(data);
+                },
+                error: function() {
+                    failureCallback();
+                }
+            });
+        },
+        eventClick: function(info) {
+            var props = info.event.extendedProps;
+            var msg = "Pieza: " + info.event.title +
+                      "\nCliente: " + (props.cliente || 'N/A') +
+                      "\nCampaña: " + (props.campana || 'N/A') +
+                      "\nEstado: " + (props.estado || 'N/A') +
+                      "\nResponsable: " + (props.creativo || 'N/A');
+            alert(msg);
+        }
     });
+
+    calendar.render();
+
+    $('#btnRecargarCalendario, #filtro-cliente, #filtro-campana').on('change click', function() {
+        calendar.refetchEvents();
+    });
+});
 </script>
 {% endblock %}

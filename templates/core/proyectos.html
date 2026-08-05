@@ -1,96 +1,124 @@
 {% extends 'base.html' %}
 
-{% block title %}Proyectos - AgenciaOS{% endblock %}
-{% block header %}Gestión de Proyectos{% endblock %}
+{% block title %}Proyectos - AgencyOS{% endblock %}
+{% block header %}Gestión de Proyectos Creativos{% endblock %}
 
 {% block content %}
-<div class="row">
-    <!-- Formulario -->
-    <div class="col-md-5 mb-4">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0">➕ Crear Nuevo Proyecto</h5>
-            </div>
-            <div class="card-body">
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-white mb-1">Catálogo de Proyectos Creativos</h4>
+            <p class="text-secondary small mb-0">Define tipos de proyectos, prioridades y presupuesto de horas estimadas vs reales.</p>
+        </div>
+        <span class="badge bg-primary rounded-pill px-3 py-2 fs-6">{{ proyectos.count }} proyectos</span>
+    </div>
+
+    <div class="row g-4">
+        <!-- FORMULARIO PROYECTO -->
+        <div class="col-lg-5">
+            <div class="card card-custom p-4">
+                <h5 class="fw-bold text-white mb-3"><i class="fa-solid fa-folder-plus text-primary me-2"></i>Nuevo Proyecto</h5>
                 <form method="POST">
                     {% csrf_token %}
-                    
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Campaña y Cliente</label>
+                        <label class="form-label small text-secondary fw-bold">Campaña y Cliente</label>
                         {{ form.campana }}
-                        {% if form.campana.errors %}
-                            <div class="text-danger small">{{ form.campana.errors }}</div>
-                        {% endif %}
                     </div>
-
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Título del Proyecto</label>
+                        <label class="form-label small text-secondary fw-bold">Nombre del Proyecto</label>
                         {{ form.titulo }}
-                        {% if form.titulo.errors %}
-                            <div class="text-danger small">{{ form.titulo.errors }}</div>
-                        {% endif %}
                     </div>
-
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Tipo de Proyecto</label>
+                            {{ form.tipo }}
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Prioridad</label>
+                            {{ form.prioridad }}
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Horas Estimadas</label>
+                            {{ form.horas_estimadas }}
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Horas Reales</label>
+                            {{ form.horas_reales }}
+                        </div>
+                    </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Descripción</label>
+                        <label class="form-label small text-secondary fw-bold">Descripción</label>
                         {{ form.descripcion }}
-                        {% if form.descripcion.errors %}
-                            <div class="text-danger small">{{ form.descripcion.errors }}</div>
-                        {% endif %}
                     </div>
-
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold">Estado</label>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Estado</label>
                             {{ form.estado }}
-                            {% if form.estado.errors %}
-                                <div class="text-danger small">{{ form.estado.errors }}</div>
-                            {% endif %}
                         </div>
-
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold">Fecha Límite</label>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Fecha Límite</label>
                             {{ form.fecha_limite }}
-                            {% if form.fecha_limite.errors %}
-                                <div class="text-danger small">{{ form.fecha_limite.errors }}</div>
-                            {% endif %}
                         </div>
                     </div>
-
-                    <button type="submit" class="btn btn-primary w-100 mt-2">Guardar Proyecto</button>
+                    <button type="submit" class="btn btn-primary w-100 fw-semibold rounded-pill py-2">
+                        <i class="fa-solid fa-save me-1"></i> Guardar Proyecto
+                    </button>
                 </form>
             </div>
         </div>
-    </div>
 
-    <!-- Lista de Proyectos -->
-    <div class="col-md-7">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">📋 Proyectos Registrados</h5>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for p in proyectos %}
-                    <li class="list-group-item p-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="mb-1 text-primary fw-bold">
-                                {% if p.titulo %}{{ p.titulo }}{% else %}{{ p.nombre_proyecto }}{% endif %}
-                            </h6>
-                            <span class="badge bg-info text-dark">{{ p.get_estado_display }}</span>
-                        </div>
-                        <p class="small text-muted mb-1">{{ p.descripcion|default:"Sin descripción" }}</p>
-                        <small class="text-secondary">
-                            📅 Entrega: {{ p.fecha_limite|date:"d/m/Y" }} 
-                            {% if p.campana.cliente %}
-                                | 🏢 {{ p.campana.cliente.nombre_empresa }}
-                            {% endif %}
-                        </small>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">Aún no hay proyectos registrados.</li>
-                    {% endfor %}
-                </ul>
+        <!-- LISTA DE PROYECTOS -->
+        <div class="col-lg-7">
+            <div class="card card-custom p-0 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase">
+                                <th class="ps-4">Proyecto / Campaña</th>
+                                <th>Tipo / Prioridad</th>
+                                <th>Horas Est / Real</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in proyectos %}
+                            <tr>
+                                <td class="ps-4">
+                                    <strong class="text-white d-block">{{ p.titulo }}</strong>
+                                    <small class="text-muted"><i class="fa-solid fa-bullhorn me-1"></i>{{ p.campana.nombre }} ({{ p.campana.cliente.nombre_empresa }})</small>
+                                </td>
+                                <td>
+                                    <div class="small fw-semibold text-white">{{ p.get_tipo_display }}</div>
+                                    {% if p.prioridad == 'URGENTE' %}
+                                        <span class="badge bg-danger">Urgente</span>
+                                    {% elif p.prioridad == 'ALTA' %}
+                                        <span class="badge bg-warning text-dark">Alta</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ p.get_prioridad_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-info fw-bold">{{ p.horas_estimadas }}h</small> /
+                                    <small class="text-warning fw-bold">{{ p.horas_reales }}h</small>
+                                </td>
+                                <td>
+                                    {% if p.estado == 'FINALIZADO' %}
+                                        <span class="badge bg-success rounded-pill">Finalizado</span>
+                                    {% elif p.estado == 'EN_PROCESO' %}
+                                        <span class="badge bg-info text-dark rounded-pill">En Proceso</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary rounded-pill">{{ p.get_estado_display }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-muted text-center py-4">No hay proyectos registrados.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

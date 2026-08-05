@@ -3,47 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}AgenciaOS{% endblock %}</title>
+    <title>{% block title %}AgencyOS - Sistema de Gestión de Agencias{% endblock %}</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <!-- FontAwesome para iconos -->
+    <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- jQuery UI CSS -->
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+    <!-- Driver.js CSS (Tour Guiado) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     
     <style>
+        :root {
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --bg-card-hover: #334155;
+            --accent-primary: #3b82f6;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
         body {
-            background-color: #0f172a;
-            color: #f8fafc;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
             min-height: 100vh;
         }
+
         .sidebar {
             min-height: 100vh;
-            background-color: #1e293b;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
             border-right: 1px solid rgba(255, 255, 255, 0.08);
         }
+
         .sidebar .nav-link {
-            color: #94a3b8;
+            color: var(--text-muted);
             padding: 0.8rem 1rem;
             border-radius: 0.5rem;
             margin-bottom: 0.3rem;
+            font-weight: 500;
             transition: all 0.2s ease;
         }
+
         .sidebar .nav-link:hover, .sidebar .nav-link.active {
             color: #ffffff;
             background-color: #334155;
+            transform: translateX(3px);
         }
+
         .sidebar .nav-link i {
             width: 24px;
         }
+
         .user-badge {
             font-size: 0.75rem;
             letter-spacing: 0.5px;
         }
+
         .main-header {
-            background-color: #1e293b;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 1rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .card-custom {
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card-custom:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .form-control, .form-select {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: #f8fafc;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background-color: #0f172a;
+            border-color: var(--accent-primary);
+            color: #f8fafc;
+            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 767.98px) {
+            .sidebar {
+                min-height: auto;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -51,7 +109,7 @@
 <body>
 <div class="container-fluid">
     <div class="row">
-        <!-- Menú Lateral Sidebar -->
+        <!-- Menú Lateral Sidebar ThemeWagon Style -->
         <nav id="sidebar" class="col-md-3 col-lg-2 d-md-block sidebar collapse p-3">
             <div class="d-flex align-items-center justify-content-center gap-2 py-3 border-bottom border-secondary border-opacity-25 mb-4">
                 <i class="bi bi-kanban-fill text-primary fs-3"></i>
@@ -59,27 +117,26 @@
             </div>
 
             <ul class="nav flex-column">
-                <!-- VISTAS COMUNES / ROL CLIENTE -->
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}" id="nav-dashboard">
                         <i class="fa-solid fa-chart-pie me-2"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'kanban' %}active{% endif %}" href="{% url 'kanban' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'kanban' %}active{% endif %}" href="{% url 'kanban' %}" id="nav-kanban">
                         <i class="fa-solid fa-list-check me-2"></i> Tablero Kanban
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'cronograma' %}active{% endif %}" href="{% url 'cronograma' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'cronograma' %}active{% endif %}" href="{% url 'cronograma' %}" id="nav-cronograma">
                         <i class="fa-solid fa-calendar-days me-2"></i> Cronograma
                     </a>
                 </li>
 
-                <!-- SECCIÓN EXCLUSIVA DE ADMINISTRADOR -->
-                {% if user.is_superuser or user.groups.all.0.name == 'Administrador' %}
+                <!-- SECCIÓN ADMINISTRADOR / PM -->
+                {% if user.is_superuser or user.groups.all.0.name == 'Administrador' or user.groups.all.0.name == 'Director de Arte' %}
                     <li class="nav-item mt-3 mb-1">
-                        <small class="text-uppercase text-secondary fw-bold px-3" style="font-size: 0.68rem;">Gestión Admin</small>
+                        <small class="text-uppercase text-secondary fw-bold px-3" style="font-size: 0.68rem;">Gestión Admin & PM</small>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'crear_proyecto' %}active{% endif %}" href="{% url 'crear_proyecto' %}">
@@ -97,6 +154,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'gestionar_creativos' %}active{% endif %}" href="{% url 'gestionar_creativos' %}">
+                            <i class="fa-solid fa-palette me-2"></i> Creativos
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'crear_usuario' %}active{% endif %}" href="{% url 'crear_usuario' %}">
                             <i class="fa-solid fa-user-plus me-2"></i> Usuarios del Equipo
                         </a>
@@ -108,25 +170,27 @@
         <!-- Contenido Principal -->
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
             
-            <!-- Header Superior con Info de Usuario y Cerrar Sesión -->
+            <!-- Header Superior -->
             <header class="main-header p-3 mb-4 d-flex justify-content-between align-items-center">
                 <h1 class="h4 fw-bold text-white mb-0">{% block header %}Panel Principal{% endblock %}</h1>
 
                 <div class="d-flex align-items-center gap-3">
                     <div class="text-end d-none d-sm-block">
                         <div class="fw-bold text-white small">{{ user.get_full_name|default:user.username }}</div>
-                        <span class="badge user-badge {% if user.is_superuser or user.groups.all.0.name == 'Administrador' %}bg-primary{% else %}bg-info text-dark{% endif %} rounded-pill px-2">
+                        <span class="badge user-badge {% if user.is_superuser or user.groups.all.0.name == 'Administrador' %}bg-primary{% elif user.perfil_creativo %}bg-warning text-dark{% else %}bg-info text-dark{% endif %} rounded-pill px-2">
                             {% if user.is_superuser or user.groups.all.0.name == 'Administrador' %}
-                                <i class="fa-solid fa-shield-halved me-1"></i>Administrador
+                                <i class="fa-solid fa-shield-halved me-1"></i>Director / PM
+                            {% elif user.perfil_creativo %}
+                                <i class="fa-solid fa-paintbrush me-1"></i>Creativo
                             {% else %}
                                 <i class="fa-solid fa-building me-1"></i>Cliente
                             {% endif %}
                         </span>
                     </div>
 
-                    <!-- Botón Cerrar Sesión (Abre Modal de Confirmación) -->
+                    <!-- Botón Cerrar Sesión -->
                     <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#logoutModal">
-                        <i class="fa-solid fa-right-from-bracket me-1"></i> Cerrar Sesión
+                        <i class="fa-solid fa-right-from-bracket me-1"></i> Salir
                     </button>
                 </div>
             </header>
@@ -142,13 +206,12 @@
             {% endif %}
 
             {% block content %}
-            <!-- El contenido específico de cada página se renderiza aquí -->
             {% endblock %}
         </main>
     </div>
 </div>
 
-<!-- Modal de Confirmación de Cerrar Sesión -->
+<!-- Modal Cerrar Sesión -->
 <div class="modal fade" id="logoutModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content bg-dark text-white border-secondary">
@@ -170,8 +233,15 @@
     </div>
 </div>
 
-<!-- Bootstrap 5 JS Bundle -->
+<!-- Librerías JS Core: jQuery, jQuery UI, Bootstrap 5, FullCalendar, Hotkeys-js, Driver.js, Chart.js -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://unpkg.com/hotkeys-js/dist/hotkeys.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.cdn.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 {% block extra_js %}{% endblock %}
 </body>
 </html>

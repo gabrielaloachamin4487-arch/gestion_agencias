@@ -1,171 +1,300 @@
-{% extends 'base.html' %} <!-- Ajusta a tu plantilla base si aplica -->
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Operativo - AgencyOS{% endblock %}
+{% block header %}Dashboard y Métricas de Rendimiento{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid px-0">
 
   {% if es_cliente %}
     <!-- ========================================== -->
-    <!-- VISTA PRIVADA EXCLUSIVA PARA EL CLIENTE    -->
+    <!-- PORTAL Y DASHBOARD PARA EL CLIENTE         -->
     <!-- ========================================== -->
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
-        <h2 class="fw-bold mb-0">Panel de Control de Cliente</h2>
-        <p class="text-muted small">Seguimiento de entregables y fechas limite de tus proyectos</p>
+        <h2 class="fw-bold mb-1 text-white">Portal de Seguimiento del Cliente</h2>
+        <p class="text-secondary small mb-0">Revisa tus campañas, aprueba piezas publicitarias y consulta tu cronograma.</p>
       </div>
-      <span class="badge bg-primary px-3 py-2">Cliente: {{ request.user.get_full_name|default:request.user.username }}</span>
+      {% if cliente %}
+        <span class="badge bg-primary px-3 py-2 rounded-pill fs-6">
+          <i class="fa-solid fa-building me-1"></i> {{ cliente.nombre_empresa }} (RUC: {{ cliente.ruc|default:'N/A' }})
+        </span>
+      {% endif %}
     </div>
 
-    <!-- TARJETAS DE RESUMEN DEL CLIENTE -->
+    <!-- METRICAS RESUMEN CLIENTE -->
     <div class="row g-3 mb-4">
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-dark text-white">
-          <span class="text-muted small text-uppercase fw-bold">Campañas Activas</span>
-          <h3 class="fw-bold my-1">{{ total_campanas }}</h3>
-          <span class="small text-info">Asignadas a tu cuenta</span>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small text-uppercase fw-bold">Campañas Activas</span>
+          <h3 class="fw-bold my-1 text-white">{{ total_campanas }}</h3>
+          <span class="small text-info"><i class="fa-solid fa-bullhorn me-1"></i> En seguimiento</span>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-dark text-white">
-          <span class="text-muted small text-uppercase fw-bold">Proyectos</span>
-          <h3 class="fw-bold my-1">{{ total_proyectos }}</h3>
-          <span class="small text-warning">En desarrollo</span>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small text-uppercase fw-bold">Proyectos Contratados</span>
+          <h3 class="fw-bold my-1 text-white">{{ total_proyectos }}</h3>
+          <span class="small text-warning"><i class="fa-solid fa-folder-open me-1"></i> En desarrollo</span>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-dark text-white">
-          <span class="text-muted small text-uppercase fw-bold">Entregables Pendientes</span>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small text-uppercase fw-bold">Entregables Pendientes</span>
           <h3 class="fw-bold my-1 text-warning">{{ entregables_pendientes }}</h3>
-          <span class="small text-muted">Por aprobar o en proceso</span>
+          <span class="small text-muted">Por revisar o aprobar</span>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-dark text-white">
-          <span class="text-muted small text-uppercase fw-bold">Artes Aprobados</span>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small text-uppercase fw-bold">Artes Aprobados</span>
           <h3 class="fw-bold my-1 text-success">{{ entregables_aprobados }}</h3>
-          <span class="small text-success">Completados con éxito</span>
+          <span class="small text-success"><i class="fa-solid fa-circle-check me-1"></i> Listos para publicación</span>
         </div>
       </div>
     </div>
 
-    <!-- CALENDARIO DE ENTREGAS PARA EL CLIENTE -->
-    <div class="card border-0 shadow-sm p-4 bg-dark text-white mb-4">
-      <h5 class="fw-bold mb-3">📅 Cronograma de Entregas y Revisiones</h5>
+    <!-- CALENDARIO INTERACTIVO CLIENTE -->
+    <div class="card card-custom p-4 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0 text-white"><i class="fa-solid fa-calendar-check text-primary me-2"></i>Cronograma de Entregas y Revisiones</h5>
+        <a href="{% url 'kanban' %}" class="btn btn-sm btn-primary rounded-pill px-3">Ir al Tablero Kanban</a>
+      </div>
       <div id="calendario-cliente" style="min-height: 450px;"></div>
     </div>
 
-    <!-- SCRIPT DE FULLCALENDAR PARA CARGAR SUS EVENTOS -->
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        var calendarEl = document.getElementById('calendario-cliente');
-        var calendar = new FullCalendar.Calendar(calendarEl, {
-          initialView: 'dayGridMonth',
-          locale: 'es',
-          headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,listWeek'
-          },
-          events: '/api/eventos-entregables/', // Consume la API filtrada que ya tienes en views.py
-          eventClick: function(info) {
-            alert('Entregable: ' + info.event.title + '\nEstado: ' + info.event.extendedProps.estado);
-          }
-        });
-        calendar.render();
-      });
-    </script>
-
   {% else %}
     <!-- ========================================== -->
-    <!-- VISTA PRIVADA DEL ADMINISTRADOR / AGENCIA   -->
+    <!-- DASHBOARD OPERATIVO DE AGENCIA / PM        -->
     <!-- ========================================== -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2 class="fw-bold mb-0">Dashboard Operativo y Financiero</h2>
-      <span class="badge bg-danger px-3 py-2">Administrador: {{ request.user.username }}</span>
+      <div>
+        <h2 class="fw-bold mb-1 text-white">Dashboard Operativo y Financiero</h2>
+        <p class="text-secondary small mb-0">Supervisión de carga de trabajo, rentabilidad por cliente y control de entregas.</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{% url 'exportar_rentabilidad_csv' %}" class="btn btn-outline-success btn-sm rounded-pill px-3">
+          <i class="fa-solid fa-file-excel me-1"></i> Exportar Rentabilidad (CSV)
+        </a>
+      </div>
     </div>
 
-    <!-- TARJETAS GENERALES DE LA AGENCIA -->
+    <!-- METRICAS PRINCIPALES AGENCIA -->
     <div class="row g-3 mb-4">
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3">
-          <span class="text-muted small fw-bold">PROYECTOS ACTIVOS</span>
-          <h3 class="fw-bold my-1">{{ proyectos_activos }}</h3>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small fw-bold">PROYECTOS ACTIVOS</span>
+          <h3 class="fw-bold my-1 text-primary">{{ proyectos_activos }}</h3>
+          <span class="small text-muted">En diseño, video o web</span>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3">
-          <span class="text-muted small fw-bold">TOTAL CLIENTES</span>
-          <h3 class="fw-bold my-1">{{ total_clientes }}</h3>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small fw-bold">TOTAL CLIENTES</span>
+          <h3 class="fw-bold my-1 text-info">{{ total_clientes }}</h3>
+          <span class="small text-muted">Empresas registradas</span>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3">
-          <span class="text-muted small fw-bold">TAREAS PENDIENTES</span>
-          <h3 class="fw-bold my-1">{{ tareas_pendientes }}</h3>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small fw-bold">TAREAS PENDIENTES</span>
+          <h3 class="fw-bold my-1 text-warning">{{ tareas_pendientes }}</h3>
+          <span class="small text-muted">Entregables por finalizar</span>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3">
-          <span class="text-muted small fw-bold">COSTO OPERATIVO PROM.</span>
-          <h3 class="fw-bold my-1">$25.00 <small class="fs-6 text-muted">/hr</small></h3>
+        <div class="card card-custom p-3">
+          <span class="text-secondary small fw-bold">TARIFA ESTÁNDAR HORA</span>
+          <h3 class="fw-bold my-1 text-success">$25.00 <small class="fs-6 text-muted">/hr</small></h3>
+          <span class="small text-muted">Costo operativo base</span>
         </div>
       </div>
     </div>
 
-    <!-- REPORTE DE RENTABILIDAD Y EXCESO DE HORAS -->
-    <div class="row g-3">
-      <div class="col-md-8">
-        <div class="card border-0 shadow-sm p-4">
-          <h5 class="fw-bold mb-3">Reporte de Rentabilidad por Cliente</h5>
+    <!-- CARGA DE TRABAJO (GRÁFICO CHART.JS Y BARRAS) -->
+    <div class="row g-3 mb-4">
+      <div class="col-lg-6">
+        <div class="card card-custom p-4 h-100">
+          <h5 class="fw-bold text-white mb-3">
+            <i class="fa-solid fa-chart-column text-primary me-2"></i>Carga de Trabajo de Creativos (Máx 40h/semana)
+          </h5>
+          <canvas id="cargaTrabajoChart" height="220"></canvas>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card card-custom p-4 h-100">
+          <h5 class="fw-bold text-white mb-3"><i class="fa-solid fa-list-progress text-info me-2"></i>Detalle de Disponibilidad por Diseñador/Copy</h5>
           <div class="table-responsive">
-            <table class="table align-middle">
+            <table class="table table-dark table-hover align-middle mb-0" style="font-size: 0.85rem;">
               <thead>
                 <tr>
-                  <th>CLIENTE</th>
-                  <th>PRESUPUESTO</th>
-                  <th>HORAS INV.</th>
-                  <th>COSTO OP.</th>
-                  <th>RENTABILIDAD</th>
+                  <th>Creativo</th>
+                  <th>Rol</th>
+                  <th>Asignado</th>
+                  <th>Carga (40h)</th>
+                  <th>Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {% for r in reporte_rentabilidad %}
+                {% for c in carga_creativos %}
                   <tr>
-                    <td><strong>{{ r.cliente }}</strong></td>
-                    <td>${{ r.presupuesto }}</td>
-                    <td>{{ r.horas_invertidas }} hrs</td>
-                    <td>${{ r.costo_total }}</td>
-                    <td class="{% if r.es_rentable %}text-success{% else %}text-danger{% endif %} fw-bold">
-                      ${{ r.rentabilidad }}
+                    <td><strong>{{ c.nombre }}</strong></td>
+                    <td><span class="badge bg-secondary">{{ c.rol }}</span></td>
+                    <td>{{ c.horas_asignadas }}h</td>
+                    <td style="width: 35%;">
+                      <div class="progress bg-secondary" style="height: 12px;">
+                        <div class="progress-bar {% if c.sobrecargado %}bg-danger{% elif c.porcentaje > 75 %}bg-warning{% else %}bg-success{% endif %}" 
+                             role="progressbar" 
+                             style="width: {{ c.porcentaje }}%" 
+                             aria-valuenow="{{ c.porcentaje }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100"></div>
+                      </div>
+                      <small class="text-muted" style="font-size: 0.7rem;">{{ c.porcentaje }}%</small>
+                    </td>
+                    <td>
+                      {% if c.sobrecargado %}
+                        <span class="badge bg-danger">Sobrecargado</span>
+                      {% else %}
+                        <span class="badge bg-success">Disponible</span>
+                      {% endif %}
                     </td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="5" class="text-muted text-center">No hay registros de rentabilidad.</td></tr>
+                  <tr><td colspan="5" class="text-muted text-center">No hay creativos registrados.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         </div>
       </div>
-      
-      <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-4">
-          <h5 class="fw-bold text-danger mb-3">Exceso de Horas en Revisiones</h5>
-          <ul class="list-group list-group-flush">
-            {% for ent in entregables_revision %}
-              <li class="list-group-item px-0">
-                <strong>{{ ent.titulo }}</strong><br>
-                <small class="text-muted">Horas extra: {{ ent.horas_revision }} hrs</small>
-              </li>
+    </div>
+
+    <!-- REPORTE DE RENTABILIDAD POR CLIENTE Y HORAS REBASADAS -->
+    <div class="card card-custom p-4 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold text-white mb-0">
+          <i class="fa-solid fa-coins text-warning me-2"></i>Reporte de Rentabilidad por Cliente y Horas Rebasadas (>3 Revisiones)
+        </h5>
+        <a href="{% url 'exportar_rentabilidad_csv' %}" class="btn btn-sm btn-outline-success rounded-pill px-3">
+          <i class="fa-solid fa-download me-1"></i> Descargar Reporte CSV
+        </a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-dark table-striped align-middle mb-0">
+          <thead>
+            <tr class="text-secondary small text-uppercase">
+              <th>CLIENTE</th>
+              <th>RUC / TAX ID</th>
+              <th>PRESUPUESTO</th>
+              <th>HORAS REALES</th>
+              <th>HORAS REBASADAS</th>
+              <th>COSTO EXTRAS</th>
+              <th>RENTABILIDAD NETA</th>
+              <th>ESTADO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in reporte_rentabilidad %}
+              <tr>
+                <td><strong>{{ r.cliente }}</strong></td>
+                <td><small class="text-muted">{{ r.ruc }}</small></td>
+                <td>${{ r.presupuesto }}</td>
+                <td>{{ r.horas_reales }} hrs</td>
+                <td>
+                  {% if r.horas_rebasadas > 0 %}
+                    <span class="badge bg-danger px-2">{{ r.horas_rebasadas }} hrs</span>
+                  {% else %}
+                    <span class="badge bg-secondary px-2">0 hrs</span>
+                  {% endif %}
+                </td>
+                <td class="text-warning">${{ r.costo_horas_extra }}</td>
+                <td class="{% if r.es_rentable %}text-success{% else %}text-danger{% endif %} fw-bold fs-6">
+                  ${{ r.rentabilidad }}
+                </td>
+                <td>
+                  {% if r.es_rentable %}
+                    <span class="badge bg-success rounded-pill px-3">Rentable</span>
+                  {% else %}
+                    <span class="badge bg-danger rounded-pill px-3">Déficit</span>
+                  {% endif %}
+                </td>
+              </tr>
             {% empty %}
-              <li class="list-group-item px-0 text-muted">Sin revisiones registradas.</li>
+              <tr><td colspan="8" class="text-muted text-center">Sin clientes registrados para rentabilidad.</td></tr>
             {% endfor %}
-          </ul>
-        </div>
+          </tbody>
+        </table>
       </div>
     </div>
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    {% if es_cliente %}
+      // Renderizar FullCalendar en Dashboard del cliente
+      var calendarEl = document.getElementById('calendario-cliente');
+      if (calendarEl) {
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+          initialView: 'dayGridMonth',
+          locale: 'es',
+          themeSystem: 'bootstrap5',
+          headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,listWeek'
+          },
+          events: '{% url "api_eventos_entregables" %}',
+          eventClick: function(info) {
+            alert('Pieza: ' + info.event.title + '\nEstado: ' + info.event.extendedProps.estado);
+          }
+        });
+        calendar.render();
+      }
+    {% else %}
+      // Renderizar Gráfico de Carga de Trabajo Chart.js
+      var ctx = document.getElementById('cargaTrabajoChart');
+      if (ctx) {
+        var nombres = [{% for c in carga_creativos %}"{{ c.nombre }}"{% if not forloop.last %}, {% endif %}{% endfor %}];
+        var asignadas = [{% for c in carga_creativos %}{{ c.horas_asignadas }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+        var disponibles = [{% for c in carga_creativos %}{{ c.horas_disponibles }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: nombres,
+            datasets: [
+              {
+                label: 'Horas Asignadas',
+                data: asignadas,
+                backgroundColor: '#3b82f6',
+                borderRadius: 4
+              },
+              {
+                label: 'Horas Disponibles (de 40h)',
+                data: disponibles,
+                backgroundColor: '#10b981',
+                borderRadius: 4
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: { stacked: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+              y: { stacked: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' }, max: 50 }
+            },
+            plugins: {
+              legend: { labels: { color: '#f8fafc' } }
+            }
+          }
+        });
+      }
+    {% endif %}
+  });
+</script>
 {% endblock %}

@@ -1,65 +1,102 @@
 {% extends 'base.html' %}
 
-{% block title %}Campañas - AgenciaOS{% endblock %}
-{% block header %}Gestión de Campañas{% endblock %}
+{% block title %}Campañas - AgencyOS{% endblock %}
+{% block header %}Gestión de Campañas Multimedia{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-5 mb-4">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0">📢 Crear Nueva Campaña</h5>
-            </div>
-            <div class="card-body">
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-white mb-1">Planificación y Estrategia de Campañas</h4>
+            <p class="text-secondary small mb-0">Asigna presupuestos, vigencias y estados por cada cliente.</p>
+        </div>
+        <span class="badge bg-primary rounded-pill px-3 py-2 fs-6">{{ campanas.count }} campañas</span>
+    </div>
+
+    <div class="row g-4">
+        <!-- FORMULARIO CREAR CAMPAÑA -->
+        <div class="col-lg-5">
+            <div class="card card-custom p-4">
+                <h5 class="fw-bold text-white mb-3"><i class="fa-solid fa-bullhorn text-primary me-2"></i>Nueva Campaña</h5>
                 <form method="POST">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Cliente</label>
+                        <label class="form-label small text-secondary fw-bold">Cliente Contratante</label>
                         {{ form.cliente }}
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Nombre de la Campaña</label>
+                        <label class="form-label small text-secondary fw-bold">Nombre de la Campaña</label>
                         {{ form.nombre }}
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Presupuesto ($)</label>
+                        <label class="form-label small text-secondary fw-bold">Presupuesto Asignado ($)</label>
                         {{ form.presupuesto }}
                     </div>
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold">Fecha Inicio</label>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Fecha Inicio</label>
                             {{ form.fecha_inicio }}
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold">Fecha Fin</label>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary fw-bold">Fecha Fin</label>
                             {{ form.fecha_fin }}
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-warning w-100 mt-2 fw-bold">Guardar Campaña</button>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary fw-bold">Estado de Campaña</label>
+                        {{ form.estado }}
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 fw-semibold rounded-pill py-2">
+                        <i class="fa-solid fa-save me-1"></i> Guardar Campaña
+                    </button>
                 </form>
             </div>
         </div>
-    </div>
 
-    <div class="col-md-7">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">📋 Campañas Existentes</h5>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for c in campanas %}
-                    <li class="list-group-item p-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1 text-primary fw-bold">{{ c.nombre }}</h6>
-                            <small class="text-muted">🏢 Cliente: {{ c.cliente.nombre_empresa }} | 📅 Inicio: {{ c.fecha_inicio|date:"d/m/Y" }}</small>
-                        </div>
-                        <span class="badge bg-success">${{ c.presupuesto }}</span>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">Aún no hay campañas registradas.</li>
-                    {% endfor %}
-                </ul>
+        <!-- LISTA DE CAMPAÑAS -->
+        <div class="col-lg-7">
+            <div class="card card-custom p-0 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase">
+                                <th class="ps-4">Campaña / Cliente</th>
+                                <th>Fechas Vigencia</th>
+                                <th>Presupuesto</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in campanas %}
+                            <tr>
+                                <td class="ps-4">
+                                    <strong class="text-white d-block">{{ c.nombre }}</strong>
+                                    <small class="text-muted"><i class="fa-solid fa-building me-1"></i>{{ c.cliente.nombre_empresa }}</small>
+                                </td>
+                                <td>
+                                    <small class="text-secondary">
+                                        {{ c.fecha_inicio|date:"d/m/Y"|default:"-" }} al {{ c.fecha_fin|date:"d/m/Y"|default:"-" }}
+                                    </small>
+                                </td>
+                                <td><span class="text-success fw-bold">${{ c.presupuesto }}</span></td>
+                                <td>
+                                    {% if c.estado == 'EN_PROGRESO' %}
+                                        <span class="badge bg-primary rounded-pill">En Progreso</span>
+                                    {% elif c.estado == 'FINALIZADA' %}
+                                        <span class="badge bg-success rounded-pill">Finalizada</span>
+                                    {% elif c.estado == 'CANCELADA' %}
+                                        <span class="badge bg-danger rounded-pill">Cancelada</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark rounded-pill">Planificación</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-muted text-center py-4">No hay campañas registradas.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

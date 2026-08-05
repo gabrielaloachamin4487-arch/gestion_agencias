@@ -1,0 +1,48 @@
+<div class="kanban-card-item" data-id="{{ item.id }}" data-estado="{{ item.estado }}">
+    <div class="d-flex justify-content-between align-items-start mb-2">
+        <h6 class="fw-bold text-white mb-0 card-title-text">{{ item.titulo }}</h6>
+        <span class="badge bg-secondary" style="font-size: 0.7rem;">v{{ item.version }}</span>
+    </div>
+    
+    <div class="small text-secondary mb-2">
+        <i class="fa-solid fa-folder me-1"></i> {{ item.proyecto.titulo }}
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2" style="font-size: 0.78rem;">
+        <span class="text-muted">
+            <i class="fa-solid fa-user-gear me-1"></i>
+            {% if item.creativo %}
+                {{ item.creativo.usuario.get_full_name|default:item.creativo.usuario.username }}
+            {% else %}
+                Sin Asignar
+            {% endif %}
+        </span>
+        <span class="badge bg-dark border border-secondary text-info">{{ item.horas_estimadas }}h est.</span>
+    </div>
+
+    {% if item.fecha_limite %}
+        <div class="small text-muted mb-2" style="font-size: 0.75rem;">
+            <i class="fa-regular fa-clock me-1 text-warning"></i> Límite: {{ item.fecha_limite|date:"d/m/Y" }}
+        </div>
+    {% endif %}
+
+    {% if item.archivo %}
+        <div class="mb-2">
+            <a href="{{ item.archivo.url }}" target="_blank" class="btn btn-outline-primary btn-sm w-100 py-1" style="font-size: 0.75rem;">
+                <i class="fa-solid fa-paperclip me-1"></i> Ver Arte Adjunto
+            </a>
+        </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between align-items-center pt-2 border-top border-secondary border-opacity-25 mt-2">
+        <a href="{% url 'agregar_revision' item.id %}" class="btn btn-sm btn-outline-warning py-0 px-2" style="font-size: 0.75rem;" title="Dejar revisión / comentarios">
+            <i class="fa-solid fa-comment-dots me-1"></i> Revisión ({{ item.num_revisiones }})
+        </a>
+
+        {% if item.estado == 'APROBADO' %}
+            <a href="{% url 'generar_comprobante_pdf_entregable' item.id %}" target="_blank" class="btn btn-sm btn-success py-0 px-2" style="font-size: 0.75rem;" title="Descargar Comprobante PDF">
+                <i class="fa-solid fa-file-pdf me-1"></i> PDF
+            </a>
+        {% endif %}
+    </div>
+</div>

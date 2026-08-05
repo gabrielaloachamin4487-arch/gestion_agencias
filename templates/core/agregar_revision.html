@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}Agregar Revisión - AgencyOS{% endblock %}
+{% block header %}Registrar Revisión u Observaciones del Cliente{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card card-custom p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-secondary border-opacity-25">
+                    <div>
+                        <h4 class="fw-bold text-white mb-1">Revisión de Pieza: {{ entregable.titulo }}</h4>
+                        <p class="text-secondary small mb-0">Proyecto: {{ entregable.proyecto.titulo }} | Cliente: {{ entregable.proyecto.campana.cliente.nombre_empresa }}</p>
+                    </div>
+                    <span class="badge bg-warning text-dark px-3 py-2 fs-6">Versión v{{ entregable.version }}</span>
+                </div>
+
+                <!-- DETALLES DE LA PIEZA -->
+                <div class="bg-dark p-3 rounded-3 mb-4 border border-secondary border-opacity-25">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <span class="text-secondary small d-block">Creativo Responsable:</span>
+                            <strong class="text-white">{{ entregable.creativo.usuario.get_full_name|default:entregable.creativo.usuario.username|default:"Sin asignar" }}</strong>
+                        </div>
+                        <div class="col-md-6">
+                            <span class="text-secondary small d-block">Estado Actual:</span>
+                            <span class="badge bg-info text-dark">{{ entregable.get_estado_display }}</span>
+                        </div>
+                        {% if entregable.archivo %}
+                            <div class="col-12">
+                                <a href="{{ entregable.archivo.url }}" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                                    <i class="fa-solid fa-download me-1"></i> Descargar / Ver Arte Adjunto Principal
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- FORMULARIO DE REVISIÓN -->
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-white fw-bold">Observaciones / Comentarios de Revisión</label>
+                        {{ form.comentarios }}
+                        <small class="text-muted d-block mt-1">Escribe claramente las correcciones solicitadas o los motivos de la aprobación.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-white fw-bold">Archivo con Anotaciones o Boceto Editado (Opcional, Max 25MB)</label>
+                        {{ form.archivo_anotaciones }}
+                    </div>
+
+                    {% if not request.user.groups.all.0.name == 'Cliente' or request.user.is_superuser %}
+                    <div class="mb-3">
+                        <label class="form-label text-white fw-bold">Horas Adicionales Consumidas por Revisión</label>
+                        {{ form.horas_adicionales }}
+                        <small class="text-muted d-block mt-1">Nota: Si el cliente genera más de 3 revisiones, las horas extras se calcularán automáticamente como Horas Rebasadas.</small>
+                    </div>
+                    {% endif %}
+
+                    <div class="p-3 bg-dark border border-success border-opacity-50 rounded-3 mb-4">
+                        <div class="form-check form-switch">
+                            {{ form.aprobado }}
+                            <label class="form-check-label text-white fw-bold ms-2" for="{{ form.aprobado.id_for_label }}">
+                                <i class="fa-solid fa-circle-check text-success me-1"></i> Marcar Pieza como APROBADA DEFINITIVAMENTE
+                            </label>
+                        </div>
+                        <small class="text-muted d-block mt-1 ms-4">Al marcar esta casilla, el entregable pasará al estado "Aprobado" y se habilitará el comprobante oficial de entrega.</small>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{% url 'kanban' %}" class="btn btn-outline-secondary rounded-pill px-4">Cancelar</a>
+                        <button type="submit" class="btn btn-success fw-bold rounded-pill px-4">
+                            <i class="fa-solid fa-paper-plane me-1"></i> Guardar Revisión
+                        </button>
+                    </div>
+                </form>
+
+                <!-- HISTORIAL DE REVISIONES ANTERIORES -->
+                {% if entregable.revisiones.exists %}
+                    <div class="mt-5 pt-4 border-top border-secondary border-opacity-25">
+                        <h6 class="fw-bold text-white mb-3"><i class="fa-solid fa-history text-info me-2"></i>Historial de Revisiones Previas</h6>
+                        <ul class="list-group list-group-flush">
+                            {% for rev in entregable.revisiones.all %}
+                                <li class="list-group-item bg-dark text-white border-secondary border-opacity-25 p-3 rounded-3 mb-2">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <strong class="text-info">{{ rev.revisor.get_full_name|default:rev.revisor.username }}</strong>
+                                            <small class="text-muted ms-2">{{ rev.fecha_revision|date:"d/m/Y H:i" }}</small>
+                                        </div>
+                                        {% if rev.aprobado %}
+                                            <span class="badge bg-success">Aprobado</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark">Ajuste Solicitado</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="mb-1 text-secondary small">{{ rev.comentarios }}</p>
+                                    {% if rev.archivo_anotaciones %}
+                                        <a href="{{ rev.archivo_anotaciones.url }}" target="_blank" class="small text-primary text-decoration-none">
+                                            <i class="fa-solid fa-paperclip me-1"></i> Ver Anotación Adjunta
+                                        </a>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
