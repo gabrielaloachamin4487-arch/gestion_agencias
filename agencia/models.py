@@ -193,7 +193,7 @@ class Entregable(models.Model):
     def horas_rebasadas(self):
         """Si un cliente genera más de 3 revisiones sobre el entregable, 
         las horas adicionales de la 4ta revisión en adelante se registran como horas rebasadas."""
-        revs = list(self.revisiones.order_by('fecha'))
+        revs = list(self.revisiones.order_by('fecha_revision'))
         if len(revs) > 3:
             exceso = sum(float(r.horas_adicionales or 0) for r in revs[3:])
             return exceso

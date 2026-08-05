@@ -333,7 +333,6 @@ def eliminar_cliente(request, cliente_id):
 @login_required
 @solo_administrador
 def enviar_reporte_pdf_cliente(request, cliente_id):
-    """Genera y envía la notificación/reporte al correo del cliente."""
     cliente = get_object_or_404(Cliente, id=cliente_id)
     email_destino = cliente.email or (cliente.usuario.email if cliente.usuario else None)
 
@@ -712,7 +711,6 @@ def cambiar_estado_entregable(request, entregable_id):
 @login_required
 @solo_administrador
 def exportar_rentabilidad_csv(request):
-    """Exporta en formato CSV el Reporte de Rentabilidad por Cliente y Horas Rebasadas."""
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="Reporte_Rentabilidad_{date.today().strftime("%Y%m%d")}.csv"'
     
@@ -765,8 +763,6 @@ def exportar_rentabilidad_csv(request):
 
 @login_required
 def generar_comprobante_pdf_entregable(request, entregable_id):
-    """Genera una hoja de liquidación final / Comprobante de Entrega en PDF 
-    con el historial de aprobaciones y firma digital/código de verificación."""
     entregable = get_object_or_404(Entregable, id=entregable_id)
     
     buffer = io.BytesIO()
@@ -787,7 +783,6 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     cell_style = ParagraphStyle('CellStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#334155'))
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#0f172a'), fontName='Helvetica-Bold')
 
-    # Código de Verificación Hash Único
     hash_seed = f"{entregable.id}-{entregable.titulo}-{date.today().isoformat()}-AgencyOS"
     codigo_verificacion = hashlib.sha256(hash_seed.encode('utf-8')).hexdigest()[:16].upper()
 
@@ -795,7 +790,6 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     story.append(Paragraph(f"<b>Código de Verificación Digital:</b> {codigo_verificacion} &nbsp;|&nbsp; <b>Fecha:</b> {date.today().strftime('%d/%m/%Y')}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceBefore=2, spaceAfter=10))
 
-    # 1. Datos del Entregable
     cliente_obj = None
     if entregable.proyecto and entregable.proyecto.campana:
         cliente_obj = entregable.proyecto.campana.cliente
@@ -824,22 +818,28 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     ]))
     story.append(t_info)
 
-    # 2. Historial de Revisiones
     story.append(Paragraph("<b>Historial de Revisiones y Aprobación</b>", section_style))
     
     rev_headers = [Paragraph("<b>#</b>", cell_bold), Paragraph("<b>Fecha</b>", cell_bold), Paragraph("<b>Revisor</b>", cell_bold), Paragraph("<b>Resultado</b>", cell_bold), Paragraph("<b>Observaciones</b>", cell_bold)]
     rev_rows = [rev_headers]
 
-    revisiones = entregable.revisiones.all().order_by('fecha')
+    try:
+        revisiones = entregable.revisiones.all().order_by('fecha_revision')
+    except Exception:
+        revisiones = entregable.revisiones.all()
+
     if revisiones.exists():
         for i, r in enumerate(revisiones, start=1):
             estado_txt = "APROBADO" if r.aprobado else "REVISION SOLICITADA"
             revisor_nom = r.revisor.get_full_name() if r.revisor else (r.realizado_por.username if hasattr(r, 'realizado_por') and r.realizado_por else "Sistema")
             obs = limpiar_texto_ascii(r.comentarios or getattr(r, 'observaciones', 'Sin observaciones'))
             
+            f_rev = getattr(r, 'fecha_revision', None)
+            fecha_str = f_rev.strftime('%d/%m/%Y %H:%M') if (f_rev and hasattr(f_rev, 'strftime')) else (str(f_rev) if f_rev else date.today().strftime('%d/%m/%Y'))
+
             rev_rows.append([
                 Paragraph(str(i), cell_style),
-                Paragraph(r.fecha.strftime('%d/%m/%Y %H:%M') if hasattr(r.fecha, 'strftime') else str(r.fecha), cell_style),
+                Paragraph(fecha_str, cell_style),
                 Paragraph(limpiar_texto_ascii(revisor_nom), cell_style),
                 Paragraph(estado_txt, cell_bold),
                 Paragraph(obs, cell_style)
