@@ -258,21 +258,36 @@ def crear_cliente(request):
 @login_required
 @solo_administrador
 def editar_cliente(request, cliente_id):
-    """Permite editar los datos de un cliente existente."""
+    """Permite editar los datos de un cliente existente y asociar su usuario."""
     cliente = get_object_or_404(Cliente, id=cliente_id)
+    usuarios = User.objects.all().order_by('username')
+
     if request.method == 'POST':
         form = ClienteForm(request.POST, instance=cliente)
         if form.is_valid():
-            form.save()
+            cliente_obj = form.save(commit=False)
+            
+            # Captura directa del campo usuario_id si viene desde select manual
+            usuario_id = request.POST.get('usuario_id') or request.POST.get('usuario')
+            if usuario_id:
+                cliente_obj.usuario = User.objects.filter(id=usuario_id).first()
+            
+            cliente_obj.save()
             messages.success(request, f'Cliente "{cliente.nombre_empresa}" actualizado correctamente.')
             return redirect('crear_cliente')
     else:
         form = ClienteForm(instance=cliente)
 
+    context = {
+        'form': form,
+        'cliente': cliente,
+        'usuarios': usuarios,
+    }
+
     try:
-        return render(request, 'core/editar_cliente.html', {'form': form, 'cliente': cliente})
+        return render(request, 'core/editar_cliente.html', context)
     except TemplateDoesNotExist:
-        return render(request, 'editar_cliente.html', {'form': form, 'cliente': cliente})
+        return render(request, 'editar_cliente.html', context)
 
 
 @login_required
