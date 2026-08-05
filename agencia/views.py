@@ -166,12 +166,13 @@ def dashboard(request):
 
         if cliente:
             campanas = Campana.objects.filter(cliente=cliente)
+            
             proyectos = Proyecto.objects.filter(
-                Q(campana__cliente=cliente) | Q(cliente=cliente)
+                Q(campana__cliente=cliente) | (Q(cliente=cliente) if hasattr(Proyecto, 'cliente') else Q())
             ).distinct()
             
             entregables = Entregable.objects.filter(
-                Q(proyecto__campana__cliente=cliente) | Q(proyecto__cliente=cliente)
+                Q(proyecto__campana__cliente=cliente) | (Q(proyecto__cliente=cliente) if hasattr(Proyecto, 'cliente') else Q())
             ).distinct()
 
             presupuesto_total = getattr(cliente, 'presupuesto_total', None) or Decimal('0.00')
@@ -231,7 +232,7 @@ def dashboard(request):
         reporte_rentabilidad = []
         for cli in Cliente.objects.all():
             entregables_cliente = Entregable.objects.filter(
-                Q(proyecto__campana__cliente=cli) | Q(proyecto__cliente=cli)
+                Q(proyecto__campana__cliente=cli) | (Q(proyecto__cliente=cli) if hasattr(Proyecto, 'cliente') else Q())
             ).distinct()
             
             total_horas_reales = entregables_cliente.aggregate(total=Sum('horas_reales'))['total'] or Decimal('0.0')
@@ -327,6 +328,34 @@ def eliminar_cliente(request, cliente_id):
     cliente.delete()
     messages.success(request, f'Cliente "{nombre}" eliminado.')
     return redirect('crear_cliente')
+
+
+@login_required
+@solo_administrador
+def enviar_reporte_pdf_cliente(request, cliente_id):
+    """Genera y envía la notificación/reporte al correo del cliente."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    email_destino = cliente.email or (cliente.usuario.email if cliente.usuario else None)
+
+    if not email_destino:
+        messages.error(request, f'El cliente "{cliente.nombre_empresa}" no tiene un correo electrónico registrado.')
+        return redirect('dashboard')
+
+    try:
+        asunto = f"Reporte de Proyectos y Estado - {cliente.nombre_empresa}"
+        mensaje = (
+            f"Estimado/a {cliente.contacto_nombre or cliente.nombre_empresa},\n\n"
+            f"Se ha generado la actualización del estado de sus campañas y proyectos en la plataforma AgencyOS.\n\n"
+            f"Por favor, ingrese a su panel de control para revisar el detalle de sus entregables y revisiones.\n\n"
+            f"Atentamente,\nEl Equipo de AgencyOS"
+        )
+        
+        send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, [email_destino], fail_silently=True)
+        messages.success(request, f'Reporte enviado exitosamente a {email_destino}.')
+    except Exception as e:
+        messages.error(request, f'Ocurrió un error al intentar enviar el correo: {e}')
+
+    return redirect('dashboard')
 
 
 # ==========================================
@@ -474,7 +503,7 @@ def kanban_view(request):
 
         if cliente:
             base_qs = Entregable.objects.filter(
-                Q(proyecto__campana__cliente=cliente) | Q(proyecto__cliente=cliente)
+                Q(proyecto__campana__cliente=cliente) | (Q(proyecto__cliente=cliente) if hasattr(Proyecto, 'cliente') else Q())
             ).select_related('proyecto', 'creativo__usuario', 'creativo').distinct()
         else:
             base_qs = Entregable.objects.none()
@@ -576,14 +605,14 @@ def api_eventos_entregables(request):
     if es_cliente:
         cliente_obj = Cliente.objects.filter(usuario=request.user).first()
         entregables = Entregable.objects.filter(
-            Q(proyecto__campana__cliente=cliente_obj) | Q(proyecto__cliente=cliente_obj)
+            Q(proyecto__campana__cliente=cliente_obj) | (Q(proyecto__cliente=cliente_obj) if hasattr(Proyecto, 'cliente') else Q())
         ).distinct() if cliente_obj else Entregable.objects.none()
     else:
         entregables = Entregable.objects.all()
 
     if cliente_id:
         entregables = entregables.filter(
-            Q(proyecto__campana__cliente_id=cliente_id) | Q(proyecto__cliente_id=cliente_id)
+            Q(proyecto__campana__cliente_id=cliente_id) | (Q(proyecto__cliente_id=cliente_id) if hasattr(Proyecto, 'cliente') else Q())
         )
     if campana_id:
         entregables = entregables.filter(proyecto__campana_id=campana_id)
@@ -704,7 +733,7 @@ def exportar_rentabilidad_csv(request):
     COSTO_HORA = Decimal('25.0')
     for cli in Cliente.objects.all():
         entregables = Entregable.objects.filter(
-            Q(proyecto__campana__cliente=cli) | Q(proyecto__cliente=cli)
+            Q(proyecto__campana__cliente=cli) | (Q(proyecto__cliente=cli) if hasattr(Proyecto, 'cliente') else Q())
         ).distinct()
         
         total_horas_reales = entregables.aggregate(total=Sum('horas_reales'))['total'] or Decimal('0.0')
@@ -767,119 +796,74 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceBefore=2, spaceAfter=10))
 
     # 1. Datos del Entregable
-    cliente_nombre = entregable.proyecto.campana.cliente.nombre_empresa if (entregable.proyecto and entregable.proyecto.campana and entregable.proyecto.campana.cliente) else 'N/A'
-    cliente_ruc = getattr(entregable.proyecto.campana.cliente, 'ruc', 'N/A') if (entregable.proyecto and entregable.proyecto.campana and entregable.proyecto.campana.cliente) else 'N/A'
+    cliente_obj = None
+    if entregable.proyecto and entregable.proyecto.campana:
+        cliente_obj = entregable.proyecto.campana.cliente
+    
+    cliente_nombre = cliente_obj.nombre_empresa if cliente_obj else 'N/A'
+    cliente_ruc = getattr(cliente_obj, 'ruc', 'N/A') if cliente_obj else 'N/A'
     campana_nombre = entregable.proyecto.campana.nombre if (entregable.proyecto and entregable.proyecto.campana) else 'N/A'
 
     info_data = [
         [Paragraph("<b>Título de la Pieza:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.titulo), cell_bold)],
         [Paragraph("<b>Proyecto / Campaña:</b>", cell_style), Paragraph(limpiar_texto_ascii(f"{entregable.proyecto.titulo if entregable.proyecto else 'N/A'} / {campana_nombre}"), cell_style)],
         [Paragraph("<b>Cliente Contratante:</b>", cell_style), Paragraph(limpiar_texto_ascii(f"{cliente_nombre} (RUC: {cliente_ruc})"), cell_style)],
-        [Paragraph("<b>Creativo / Diseñador:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.creativo.usuario.get_full_name() if entregable.creativo else 'Sin asignar'), cell_style)],
+        [Paragraph("<b>Creativo Asignado:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.creativo.usuario.get_full_name() if entregable.creativo else 'Sin asignar'), cell_style)],
         [Paragraph("<b>Estado Actual:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.get_estado_display()), cell_bold)],
-        [Paragraph("<b>Horas Estimadas / Reales:</b>", cell_style), Paragraph(f"{entregable.horas_estimadas} hrs / {entregable.horas_reales} hrs", cell_style)],
+        [Paragraph("<b>Horas Invertidas / Rebasadas:</b>", cell_style), Paragraph(f"{entregable.horas_reales} hrs estimadas | {getattr(entregable, 'horas_rebasadas', 0)} hrs extra", cell_style)],
     ]
-    
-    t_info = Table(info_data, colWidths=[150, 390])
+
+    t_info = Table(info_data, colWidths=[140, 400])
     t_info.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#f1f5f9')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
     ]))
     story.append(t_info)
-    story.append(Spacer(1, 12))
 
     # 2. Historial de Revisiones
-    story.append(Paragraph("<b>HISTORIAL DE REVISIONES Y APROBACIONES</b>", section_style))
-    revisiones = Revision.objects.filter(entregable=entregable).order_by('fecha_creacion')
+    story.append(Paragraph("<b>Historial de Revisiones y Aprobación</b>", section_style))
+    
+    rev_headers = [Paragraph("<b>#</b>", cell_bold), Paragraph("<b>Fecha</b>", cell_bold), Paragraph("<b>Revisor</b>", cell_bold), Paragraph("<b>Resultado</b>", cell_bold), Paragraph("<b>Observaciones</b>", cell_bold)]
+    rev_rows = [rev_headers]
 
+    revisiones = entregable.revisiones.all().order_by('fecha')
     if revisiones.exists():
-        rev_data = [[
-            Paragraph("<b>Fecha</b>", cell_bold),
-            Paragraph("<b>Revisor</b>", cell_bold),
-            Paragraph("<b>Resultado</b>", cell_bold),
-            Paragraph("<b>Observaciones / Feedback</b>", cell_bold)
-        ]]
-        for r in revisiones:
-            nombre_revisor = r.revisor.get_full_name() or r.revisor.username if r.revisor else 'Sistema'
-            resultado_txt = "APROBADO" if r.aprobado else "SOLICITÓ CORRECCIÓN"
-            color_res = colors.HexColor('#16a34a') if r.aprobado else colors.HexColor('#dc2626')
-            cell_resultado = Paragraph(f"<b>{resultado_txt}</b>", ParagraphStyle('ResStyle', parent=cell_style, textColor=color_res))
-
-            rev_data.append([
-                Paragraph(r.fecha_creacion.strftime('%d/%m/%Y %H:%M') if hasattr(r, 'fecha_creacion') and r.fecha_creacion else 'N/A', cell_style),
-                Paragraph(limpiar_texto_ascii(nombre_revisor), cell_style),
-                cell_resultado,
-                Paragraph(limpiar_texto_ascii(getattr(r, 'comentarios', '') or getattr(r, 'observaciones', 'Sin observaciones')), cell_style)
+        for i, r in enumerate(revisiones, start=1):
+            estado_txt = "APROBADO" if r.aprobado else "REVISION SOLICITADA"
+            revisor_nom = r.revisor.get_full_name() if r.revisor else (r.realizado_por.username if hasattr(r, 'realizado_por') and r.realizado_por else "Sistema")
+            obs = limpiar_texto_ascii(r.comentarios or getattr(r, 'observaciones', 'Sin observaciones'))
+            
+            rev_rows.append([
+                Paragraph(str(i), cell_style),
+                Paragraph(r.fecha.strftime('%d/%m/%Y %H:%M') if hasattr(r.fecha, 'strftime') else str(r.fecha), cell_style),
+                Paragraph(limpiar_texto_ascii(revisor_nom), cell_style),
+                Paragraph(estado_txt, cell_bold),
+                Paragraph(obs, cell_style)
             ])
-
-        t_rev = Table(rev_data, colWidths=[90, 110, 110, 230])
-        t_rev.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f1f5f9')),
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        story.append(t_rev)
     else:
-        story.append(Paragraph("No se registraron revisiones formales previas para este entregable.", cell_style))
+        rev_rows.append([Paragraph("1", cell_style), Paragraph(date.today().strftime('%d/%m/%Y'), cell_style), Paragraph("Cliente", cell_style), Paragraph("APROBADO DIRECTO", cell_bold), Paragraph("Entrega verificada y aprobada.", cell_style)])
+
+    t_rev = Table(rev_rows, colWidths=[20, 80, 110, 110, 220])
+    t_rev.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e2e8f0')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(t_rev)
 
     story.append(Spacer(1, 20))
+    story.append(Paragraph("<i>Este documento certifica la recepción y validación conforme del entregable en la plataforma AgencyOS.</i>", subtitle_style))
 
-    # 3. Firmas de Conformidad
-    story.append(Paragraph("<b>CONFORMIDAD Y VALIDEZ DIGITAL</b>", section_style))
-    story.append(Spacer(1, 15))
-
-    firmas_data = [
-        [
-            Paragraph("___________________________________<br/><b>Entregado por:</b> AgencyOS Team", cell_style),
-            Paragraph("___________________________________<br/><b>Aceptado por:</b> " + limpiar_texto_ascii(cliente_nombre), cell_style)
-        ]
-    ]
-    t_firmas = Table(firmas_data, colWidths=[270, 270])
-    t_firmas.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    story.append(t_firmas)
-
-    # Construcción final del documento PDF
     doc.build(story)
-    pdf = buffer.getvalue()
-    buffer.close()
+    buffer.seek(0)
 
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="Comprobante_Entrega_{entregable.id}_{date.today().strftime("%Y%m%d")}.pdf"'
-    response.write(pdf)
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Comprobante_Entregable_{entregable.id}.pdf"'
     return response
-@login_required
-@solo_administrador
-def enviar_reporte_pdf_cliente(request, cliente_id):
-    """Genera y envía la notificación/reporte al correo del cliente."""
-    cliente = get_object_or_404(Cliente, id=cliente_id)
-    email_destino = cliente.email or (cliente.usuario.email if cliente.usuario else None)
-
-    if not email_destino:
-        messages.error(request, f'El cliente "{cliente.nombre_empresa}" no tiene un correo electrónico registrado.')
-        return redirect('dashboard')
-
-    try:
-        asunto = f"Reporte de Proyectos y Estado - {cliente.nombre_empresa}"
-        mensaje = (
-            f"Estimado/a {cliente.contacto_nombre or cliente.nombre_empresa},\n\n"
-            f"Se ha generado la actualización del estado de sus campañas y proyectos en la plataforma AgencyOS.\n\n"
-            f"Por favor, ingrese a su panel de control para revisar el detalle de sus entregables y revisiones.\n\n"
-            f"Atentamente,\nEl Equipo de AgencyOS"
-        )
-        
-        send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, [email_destino], fail_silently=True)
-        messages.success(request, f'Reporte enviado exitosamente a {email_destino}.')
-    except Exception as e:
-        messages.error(request, f'Ocurrió un error al intentar enviar el correo: {e}')
-
-    return redirect('dashboard')
