@@ -857,3 +857,29 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     response['Content-Disposition'] = f'attachment; filename="Comprobante_Entrega_{entregable.id}_{date.today().strftime("%Y%m%d")}.pdf"'
     response.write(pdf)
     return response
+@login_required
+@solo_administrador
+def enviar_reporte_pdf_cliente(request, cliente_id):
+    """Genera y envía la notificación/reporte al correo del cliente."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    email_destino = cliente.email or (cliente.usuario.email if cliente.usuario else None)
+
+    if not email_destino:
+        messages.error(request, f'El cliente "{cliente.nombre_empresa}" no tiene un correo electrónico registrado.')
+        return redirect('dashboard')
+
+    try:
+        asunto = f"Reporte de Proyectos y Estado - {cliente.nombre_empresa}"
+        mensaje = (
+            f"Estimado/a {cliente.contacto_nombre or cliente.nombre_empresa},\n\n"
+            f"Se ha generado la actualización del estado de sus campañas y proyectos en la plataforma AgencyOS.\n\n"
+            f"Por favor, ingrese a su panel de control para revisar el detalle de sus entregables y revisiones.\n\n"
+            f"Atentamente,\nEl Equipo de AgencyOS"
+        )
+        
+        send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, [email_destino], fail_silently=True)
+        messages.success(request, f'Reporte enviado exitosamente a {email_destino}.')
+    except Exception as e:
+        messages.error(request, f'Ocurrió un error al intentar enviar el correo: {e}')
+
+    return redirect('dashboard')
