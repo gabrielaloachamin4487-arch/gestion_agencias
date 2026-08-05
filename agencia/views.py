@@ -169,6 +169,7 @@ def dashboard(request):
             proyectos = Proyecto.objects.filter(
                 Q(campana__cliente=cliente) | Q(cliente=cliente)
             ).distinct()
+            
             entregables = Entregable.objects.filter(
                 Q(proyecto__campana__cliente=cliente) | Q(proyecto__cliente=cliente)
             ).distinct()
@@ -233,7 +234,7 @@ def dashboard(request):
                 Q(proyecto__campana__cliente=cli) | Q(proyecto__cliente=cli)
             ).distinct()
             
-            total_horas_reales = entregables_cliente.aggregate(Sum('horas_reales'))['horas_reales__sum'] or Decimal('0.0')
+            total_horas_reales = entregables_cliente.aggregate(total=Sum('horas_reales'))['total'] or Decimal('0.0')
             
             total_horas_rebasadas = Decimal('0.0')
             for ent in entregables_cliente:
@@ -706,7 +707,7 @@ def exportar_rentabilidad_csv(request):
             Q(proyecto__campana__cliente=cli) | Q(proyecto__cliente=cli)
         ).distinct()
         
-        total_horas_reales = entregables.aggregate(Sum('horas_reales'))['horas_reales__sum'] or Decimal('0.0')
+        total_horas_reales = entregables.aggregate(total=Sum('horas_reales'))['total'] or Decimal('0.0')
         
         total_horas_rebasadas = Decimal('0.0')
         for ent in entregables:
