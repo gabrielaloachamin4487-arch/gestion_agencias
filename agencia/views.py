@@ -142,7 +142,7 @@ def logout_view(request):
 
 
 # ==========================================
-# 1. DASHBOARD COMPLETO (CORREGIDO DE RAÍZ)
+# 1. DASHBOARD COMPLETO
 # ==========================================
 @login_required
 def dashboard(request):
@@ -230,7 +230,6 @@ def dashboard(request):
 
         reporte_rentabilidad = []
         for cli in Cliente.objects.all():
-            # CORRECCIÓN CLAVE: Buscar entregables relacionados con el cliente seguro
             entregables_cliente = Entregable.objects.filter(
                 Q(proyecto__campana__cliente=cli) | Q(proyecto__cliente=cli)
             ).distinct()
@@ -775,67 +774,86 @@ def generar_comprobante_pdf_entregable(request, entregable_id):
     info_data = [
         [Paragraph("<b>Título de la Pieza:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.titulo), cell_bold)],
         [Paragraph("<b>Proyecto / Campaña:</b>", cell_style), Paragraph(limpiar_texto_ascii(f"{entregable.proyecto.titulo if entregable.proyecto else 'N/A'} / {campana_nombre}"), cell_style)],
-        [Paragraph("<b>Cliente Contratante:</b>", cell_style), Paragraph(limpiar_texto_ascii(f"{cliente_nombre} (RUC: {cliente_ruc or 'N/A'})"), cell_style)],
-        [Paragraph("<b>Creativo Responsable:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.creativo.usuario.get_full_name() if entregable.creativo else 'No asignado'), cell_style)],
-        [Paragraph("<b>Estado de Entrega:</b>", cell_style), Paragraph(entregable.get_estado_display(), cell_bold)],
-        [Paragraph("<b>Horas Estimadas / Reales:</b>", cell_style), Paragraph(f"{entregable.horas_estimadas}h / {entregable.horas_reales}h (Rebasadas: {getattr(entregable, 'horas_rebasadas', 0)}h)", cell_style)],
+        [Paragraph("<b>Cliente Contratante:</b>", cell_style), Paragraph(limpiar_texto_ascii(f"{cliente_nombre} (RUC: {cliente_ruc})"), cell_style)],
+        [Paragraph("<b>Creativo / Diseñador:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.creativo.usuario.get_full_name() if entregable.creativo else 'Sin asignar'), cell_style)],
+        [Paragraph("<b>Estado Actual:</b>", cell_style), Paragraph(limpiar_texto_ascii(entregable.get_estado_display()), cell_bold)],
+        [Paragraph("<b>Horas Estimadas / Reales:</b>", cell_style), Paragraph(f"{entregable.horas_estimadas} hrs / {entregable.horas_reales} hrs", cell_style)],
     ]
-    t_info = Table(info_data, colWidths=[160, 370])
+    
+    t_info = Table(info_data, colWidths=[150, 390])
     t_info.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f8fafc')),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
     ]))
     story.append(t_info)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 12))
 
     # 2. Historial de Revisiones
-    story.append(Paragraph("<b>2. Historial de Revisiones y Control de Calidad</b>", section_style))
-    revs = entregable.revisiones.all().order_by('fecha_revision')
-    data_revs = [["N°", "Fecha y Hora", "Revisor", "Observaciones", "Resultado", "Horas Adic."]]
+    story.append(Paragraph("<b>HISTORIAL DE REVISIONES Y APROBACIONES</b>", section_style))
+    revisiones = Revision.objects.filter(entregable=entregable).order_by('fecha_creacion')
 
-    if revs.exists():
-        for idx, r in enumerate(revs, 1):
-            f_str = r.fecha_revision.strftime('%d/%m/%Y %H:%M') if hasattr(r, 'fecha_revision') and r.fecha_revision else '-'
-            revisor_str = r.revisor.get_full_name() if r.revisor else (r.realizado_por.get_full_name() if hasattr(r, 'realizado_por') and r.realizado_por else 'Anónimo')
-            
-            data_revs.append([
-                str(idx),
-                f_str,
-                limpiar_texto_ascii(revisor_str),
-                Paragraph(limpiar_texto_ascii(getattr(r, 'comentarios', None) or getattr(r, 'observaciones', None) or 'Sin observaciones'), cell_style),
-                "APROBADO" if r.aprobado else "RECHAZADO / AJUSTES",
-                f"{getattr(r, 'horas_adicionales', 0)}h"
+    if revisiones.exists():
+        rev_data = [[
+            Paragraph("<b>Fecha</b>", cell_bold),
+            Paragraph("<b>Revisor</b>", cell_bold),
+            Paragraph("<b>Resultado</b>", cell_bold),
+            Paragraph("<b>Observaciones / Feedback</b>", cell_bold)
+        ]]
+        for r in revisiones:
+            nombre_revisor = r.revisor.get_full_name() or r.revisor.username if r.revisor else 'Sistema'
+            resultado_txt = "APROBADO" if r.aprobado else "SOLICITÓ CORRECCIÓN"
+            color_res = colors.HexColor('#16a34a') if r.aprobado else colors.HexColor('#dc2626')
+            cell_resultado = Paragraph(f"<b>{resultado_txt}</b>", ParagraphStyle('ResStyle', parent=cell_style, textColor=color_res))
+
+            rev_data.append([
+                Paragraph(r.fecha_creacion.strftime('%d/%m/%Y %H:%M') if hasattr(r, 'fecha_creacion') and r.fecha_creacion else 'N/A', cell_style),
+                Paragraph(limpiar_texto_ascii(nombre_revisor), cell_style),
+                cell_resultado,
+                Paragraph(limpiar_texto_ascii(getattr(r, 'comentarios', '') or getattr(r, 'observaciones', 'Sin observaciones')), cell_style)
             ])
-    else:
-        data_revs.append(["-", "-", "Sin revisiones registradas", "-", "-", "-"])
 
-    t_revs = Table(data_revs, colWidths=[25, 85, 90, 190, 80, 60])
-    t_revs.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        t_rev = Table(rev_data, colWidths=[90, 110, 110, 230])
+        t_rev.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f1f5f9')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(t_rev)
+    else:
+        story.append(Paragraph("No se registraron revisiones formales previas para este entregable.", cell_style))
+
+    story.append(Spacer(1, 20))
+
+    # 3. Firmas de Conformidad
+    story.append(Paragraph("<b>CONFORMIDAD Y VALIDEZ DIGITAL</b>", section_style))
+    story.append(Spacer(1, 15))
+
+    firmas_data = [
+        [
+            Paragraph("___________________________________<br/><b>Entregado por:</b> AgencyOS Team", cell_style),
+            Paragraph("___________________________________<br/><b>Aceptado por:</b> " + limpiar_texto_ascii(cliente_nombre), cell_style)
+        ]
+    ]
+    t_firmas = Table(firmas_data, colWidths=[270, 270])
+    t_firmas.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
-    story.append(t_revs)
+    story.append(t_firmas)
 
+    # Construcción final del documento PDF
     doc.build(story)
-    buffer.seek(0)
-    
-    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="Comprobante_{entregable.id}_{date.today().strftime("%Y%m%d")}.pdf"'
+    pdf = buffer.getvalue()
+    buffer.close()
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Comprobante_Entrega_{entregable.id}_{date.today().strftime("%Y%m%d")}.pdf"'
+    response.write(pdf)
     return response
-
-
-@login_required
-@solo_administrador
-def enviar_reporte_pdf_cliente(request, cliente_id):
-    """Vista para gestionar el envío por correo del reporte en PDF al cliente."""
-    cliente = get_object_or_404(Cliente, id=cliente_id)
-    if cliente.email:
-        messages.success(request, f'Reporte PDF enviado con éxito a {cliente.nombre_empresa} ({cliente.email}).')
-    else:
-        messages.warning(request, f'El cliente {cliente.nombre_empresa} no tiene un correo asignado.')
-    return redirect('crear_cliente')
