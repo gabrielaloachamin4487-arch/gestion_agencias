@@ -37,11 +37,11 @@
       "label": "Pantalla Principal de AgencyOS"
     },
     {
-      "src": "/static/icons/screenshot.png",
-      "sizes": "1280x720",
+      "src": "/static/icons/screenshot-mobile.png",
+      "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "AgencyOS en Móviles"
+      "label": "AgencyOS Móvil"
     }
   ]
 }
