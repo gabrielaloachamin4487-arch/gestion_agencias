@@ -1,13 +1,28 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agencia Creativa - Gestión de Proyectos</title>
+
+    <!-- Configuración PWA y Aplicación Móvil Progresiva -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AgencyOS">
+    
+    <!-- Enlace al Manifest JSON de la PWA -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <link rel="apple-touch-icon" href="{% static 'icons/icon-192x192.png' %}">
+
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     
@@ -72,6 +87,24 @@
             color: white;
         }
 
+        .btn-install-pwa {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #f8fafc;
+            font-weight: 600;
+            padding: 14px 28px;
+            border-radius: 14px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-install-pwa:hover {
+            background: rgba(51, 65, 85, 0.9);
+            color: #ffffff;
+            border-color: rgba(168, 85, 247, 0.5);
+            transform: translateY(-2px);
+        }
+
         .feature-icon {
             width: 50px;
             height: 50px;
@@ -95,7 +128,7 @@
                 <i class="bi bi-kanban-fill text-primary fs-3"></i>
                 <span class="fw-bold fs-4 text-white">Agency<span class="text-primary">OS</span></span>
             </div>
-            <!-- Enlace corregido al Login personalizado -->
+            <!-- Enlace al Login personalizado -->
             <a href="{% url 'login' %}" class="btn btn-outline-light rounded-pill px-4 btn-sm fw-semibold">
                 <i class="bi bi-box-arrow-in-right me-1"></i> Acceso Equipo
             </a>
@@ -120,11 +153,16 @@
                     Controla tus campañas, colabora con diseñadores y copywriters, visualiza entregables en el tablero Kanban y monitorea la rentabilidad en tiempo real.
                 </p>
 
-                <div class="d-flex flex-sm-row flex-column gap-3 justify-content-center mb-5">
-                    <!-- Enlace corregido al Login personalizado -->
+                <div class="d-flex flex-sm-row flex-column gap-3 justify-content-center mb-5 align-items-center">
+                    <!-- Botón Iniciar Sesión -->
                     <a href="{% url 'login' %}" class="btn btn-gradient btn-lg">
                         Iniciar Sesión <i class="bi bi-arrow-right ms-2"></i>
                     </a>
+
+                    <!-- Botón Dinámico de Instalación PWA (Oculto hasta que el navegador permita la descarga) -->
+                    <button id="btn-instalar-pwa" class="btn btn-install-pwa btn-lg d-none">
+                        <i class="fa-solid fa-download me-2 text-info"></i> Instalar App
+                    </button>
                 </div>
 
             </div>
@@ -169,5 +207,52 @@
         <p class="mb-0">&copy; Agencia de Publicidad - Sistema de Control y Entregables.</p>
     </footer>
 
+    <!-- Script de Registro Service Worker y Disparador de Instalación PWA -->
+    <script>
+      let eventoInstalacion;
+      const botonInstalar = document.getElementById('btn-instalar-pwa');
+
+      // 1. Registro del Service Worker en la landing page
+      if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function() {
+              navigator.serviceWorker.register("{% static 'sw.js' %}")
+                  .then(function(reg) {
+                      console.log('PWA ServiceWorker registrado en Landing Page:', reg.scope);
+                  })
+                  .catch(function(err) {
+                      console.log('Fallo ServiceWorker:', err);
+                  });
+          });
+      }
+
+      // 2. Capturar el evento de instalación nativo del navegador
+      window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          eventoInstalacion = e;
+          if (botonInstalar) {
+              botonInstalar.classList.remove('d-none');
+          }
+      });
+
+      // 3. Acción al hacer clic en "Instalar App"
+      if (botonInstalar) {
+          botonInstalar.addEventListener('click', async () => {
+              if (!eventoInstalacion) return;
+              eventoInstalacion.prompt();
+              const { outcome } = await eventoInstalacion.userChoice;
+              console.log(`Resultado de la instalación: ${outcome}`);
+              eventoInstalacion = null;
+              botonInstalar.classList.add('d-none');
+          });
+      }
+
+      // 4. Ocultar si la PWA ya está instalada
+      window.addEventListener('appinstalled', () => {
+          if (botonInstalar) {
+              botonInstalar.classList.add('d-none');
+          }
+          console.log('¡AgencyOS PWA instalada exitosamente!');
+      });
+    </script>
 </body>
 </html>
