@@ -159,7 +159,7 @@
                         Iniciar Sesión <i class="bi bi-arrow-right ms-2"></i>
                     </a>
 
-                    <!-- Botón Dinámico de Instalación PWA (Oculto hasta que el navegador permita la descarga) -->
+                    <!-- Botón Dinámico de Instalación PWA -->
                     <button id="btn-instalar-pwa" class="btn btn-install-pwa btn-lg d-none">
                         <i class="fa-solid fa-download me-2 text-info"></i> Instalar App
                     </button>
@@ -207,12 +207,19 @@
         <p class="mb-0">&copy; Agencia de Publicidad - Sistema de Control y Entregables.</p>
     </footer>
 
+    <!-- Bootstrap JS (necesario para las alertas o modales si se usan) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
     <!-- Script de Registro Service Worker y Disparador de Instalación PWA -->
     <script>
-      let eventoInstalacion;
+      let eventoInstalacion = null;
       const botonInstalar = document.getElementById('btn-instalar-pwa');
 
-      // 1. Registro del Service Worker en la landing page
+      // Detectar si el navegador es iOS / Safari
+      const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const esStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+
+      // 1. Registro del Service Worker
       if ('serviceWorker' in navigator) {
           window.addEventListener('load', function() {
               navigator.serviceWorker.register("{% static 'sw.js' %}")
@@ -225,28 +232,43 @@
           });
       }
 
-      // 2. Capturar el evento de instalación nativo del navegador
-      window.addEventListener('beforeinstallprompt', (e) => {
-          e.preventDefault();
-          eventoInstalacion = e;
-          if (botonInstalar) {
-              botonInstalar.classList.remove('d-none');
+      // 2. Manejo de visibilidad del botón de instalación
+      if (!esStandalone) {
+          if (esIOS) {
+              // En iOS siempre mostramos el botón ya que no dispara beforeinstallprompt
+              if (botonInstalar) botonInstalar.classList.remove('d-none');
+          } else {
+              // En Android/Desktop esperamos al evento
+              window.addEventListener('beforeinstallprompt', (e) => {
+                  e.preventDefault();
+                  eventoInstalacion = e;
+                  if (botonInstalar) {
+                      botonInstalar.classList.remove('d-none');
+                  }
+              });
           }
-      });
+      }
 
-      // 3. Acción al hacer clic en "Instalar App"
+      // 3. Acción al pulsar el botón "Instalar App"
       if (botonInstalar) {
           botonInstalar.addEventListener('click', async () => {
-              if (!eventoInstalacion) return;
-              eventoInstalacion.prompt();
-              const { outcome } = await eventoInstalacion.userChoice;
-              console.log(`Resultado de la instalación: ${outcome}`);
-              eventoInstalacion = null;
-              botonInstalar.classList.add('d-none');
+              if (esIOS) {
+                  alert('Para instalar AgencyOS en tu iPhone/iPad:\n1. Toca el botón Compartir (cuadrado con flecha hacia arriba).\n2. Selecciona "Agregar a la pantalla de inicio".');
+              } else if (eventoInstalacion) {
+                  eventoInstalacion.prompt();
+                  const { outcome } = await eventoInstalacion.userChoice;
+                  console.log(`Resultado de la instalación: ${outcome}`);
+                  if (outcome === 'accepted') {
+                      botonInstalar.classList.add('d-none');
+                  }
+                  eventoInstalacion = null;
+              } else {
+                  alert('Abre el menú de tu navegador (tres puntos ⋮ arriba a la derecha) y selecciona "Instalar aplicación" o "Agregar a la pantalla principal".');
+              }
           });
       }
 
-      // 4. Ocultar si la PWA ya está instalada
+      // 4. Ocultar botón si ya se instaló la aplicación
       window.addEventListener('appinstalled', () => {
           if (botonInstalar) {
               botonInstalar.classList.add('d-none');
