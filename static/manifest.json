@@ -1,7 +1,7 @@
 {
   "name": "AgencyOS - Gestión de Agencias",
   "short_name": "AgencyOS",
-  "description": "Controla tus campañas, colabora con diseñadores y visualiza entregables en tiempo real.",
+  "description": "Plataforma Operativa de Gestión para Agencias Creativas.",
   "start_url": "/",
   "id": "/",
   "display": "standalone",
@@ -26,6 +26,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/icons/screenshot.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Pantalla Principal de AgencyOS"
+    },
+    {
+      "src": "/static/icons/screenshot.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "AgencyOS en Móviles"
     }
   ]
 }
